@@ -27,7 +27,14 @@ try:
 except (ModuleNotFoundError, ImportError):
     DETIC_AVAILABLE = False
     Detic2DDetector = None
-from dimos.models.depth.metric3d import Metric3D
+
+try:
+    from dimos.models.depth.metric3d import Metric3D
+
+    METRIC3D_AVAILABLE = True
+except (ModuleNotFoundError, ImportError):
+    METRIC3D_AVAILABLE = False
+    Metric3D = None
 from dimos.perception.detection2d.utils import (
     calculate_depth_from_bbox,
     calculate_object_size_from_bbox,
@@ -112,26 +119,35 @@ class ObjectDetectionStream:
         # Initialize depth estimation model
         self.depth_model = None
         if not disable_depth:
-            try:
-                self.depth_model = Metric3D(gt_depth_scale)
-
-                if camera_intrinsics is not None:
-                    self.depth_model.update_intrinsic(camera_intrinsics)
-
-                    # Create 3x3 camera matrix for calculations
-                    fx, fy, cx, cy = camera_intrinsics
-                    self.camera_matrix = np.array(
-                        [[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float32
-                    )
-                else:
-                    raise ValueError("camera_intrinsics must be provided")
-
-                logger.info("Depth estimation enabled with Metric3D")
-            except Exception as e:
-                logger.warning(f"Failed to initialize Metric3D depth model: {e}")
+            if not METRIC3D_AVAILABLE:
+                logger.warning(
+                    "Metric3D not available for depth estimation. "
+                    "To enable depth estimation, install with: pip install .[cuda]"
+                )
                 logger.warning("Falling back to disable_depth=True mode")
                 self.disable_depth = True
                 self.depth_model = None
+            else:
+                try:
+                    self.depth_model = Metric3D(gt_depth_scale)
+
+                    if camera_intrinsics is not None:
+                        self.depth_model.update_intrinsic(camera_intrinsics)
+
+                        # Create 3x3 camera matrix for calculations
+                        fx, fy, cx, cy = camera_intrinsics
+                        self.camera_matrix = np.array(
+                            [[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float32
+                        )
+                    else:
+                        raise ValueError("camera_intrinsics must be provided")
+
+                    logger.info("Depth estimation enabled with Metric3D")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize Metric3D depth model: {e}")
+                    logger.warning("Falling back to disable_depth=True mode")
+                    self.disable_depth = True
+                    self.depth_model = None
         else:
             logger.info("Depth estimation disabled")
 

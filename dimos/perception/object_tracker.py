@@ -21,7 +21,15 @@ from typing import Dict, List, Optional
 from dimos.core import In, Out, Module, rpc
 from dimos.msgs.sensor_msgs import Image
 from dimos.perception.common.ibvs import ObjectDistanceEstimator
-from dimos.models.depth.metric3d import Metric3D
+
+try:
+    from dimos.models.depth.metric3d import Metric3D
+
+    METRIC3D_AVAILABLE = True
+except (ModuleNotFoundError, ImportError):
+    METRIC3D_AVAILABLE = False
+    Metric3D = None
+
 from dimos.perception.detection2d.utils import calculate_depth_from_bbox
 from dimos.utils.logging_config import setup_logger
 
@@ -93,22 +101,20 @@ class ObjectTrackingStream(Module):
                 K=K, camera_pitch=camera_pitch, camera_height=camera_height
             )
 
-        # Initialize depth model with error handling
+        if not METRIC3D_AVAILABLE:
+            raise ImportError(
+                "ObjectTrackingStream requires Metric3D. Install with: pip install .[cuda]"
+            )
+
         try:
             self.depth_model = Metric3D(gt_depth_scale)
             if camera_intrinsics is not None:
                 self.depth_model.update_intrinsic(camera_intrinsics)
-        except RuntimeError as e:
-            logger.error(f"Failed to initialize Metric3D depth model: {e}")
-            if "CUDA" in str(e):
-                logger.error("This appears to be a CUDA initialization error. Please check:")
-                logger.error("- CUDA is properly installed")
-                logger.error("- GPU drivers are up to date")
-                logger.error("- CUDA_VISIBLE_DEVICES environment variable is set correctly")
-            raise  # Re-raise the exception to fail initialization
-        except Exception as e:
-            logger.error(f"Unexpected error initializing Metric3D depth model: {e}")
-            raise
+        except ModuleNotFoundError as e:
+            raise ImportError(
+                f"ObjectTrackingStream requires Metric3D and its dependencies. "
+                f"Missing module: {e}. Install with: pip install .[cuda]"
+            ) from e
 
         # For tracking latest frame data
         self._latest_frame: Optional[np.ndarray] = None
