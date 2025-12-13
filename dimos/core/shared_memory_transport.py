@@ -52,6 +52,7 @@ class SharedMemoryImageTransport(PubSubTransport):
             try:
                 import cupy as cp  # type: ignore
                 from dimos.utils.ipc_factory import CUDA_IPC_Factory
+
                 self._channel = CUDA_IPC_Factory.create(self.shape, dtype=self.dtype)
                 self._is_cuda = True
                 self._cp = cp
@@ -67,7 +68,9 @@ class SharedMemoryImageTransport(PubSubTransport):
         self._last_seq = -1
 
         # Cache a lightweight descriptor for pickling/reattach
-        self._desc = self._channel.descriptor()  # includes kind, shape, dtype, shm names, epoch, etc.
+        self._desc = (
+            self._channel.descriptor()
+        )  # includes kind, shape, dtype, shm names, epoch, etc.
 
     # ---------- Publish (LCM-style) ----------
 
@@ -75,7 +78,10 @@ class SharedMemoryImageTransport(PubSubTransport):
         """Broadcast a frame. Accepts NumPy or CuPy or an object with .data."""
         data = getattr(msg, "data", msg)
 
-        if tuple(getattr(data, "shape", ())) != self.shape or np.dtype(getattr(data, "dtype", None)) != self.dtype:
+        if (
+            tuple(getattr(data, "shape", ())) != self.shape
+            or np.dtype(getattr(data, "dtype", None)) != self.dtype
+        ):
             raise ValueError(
                 f"Data shape/dtype mismatch: got {getattr(data, 'shape', None)} {getattr(data, 'dtype', None)}, "
                 f"expected {self.shape} {self.dtype}"
@@ -90,6 +96,7 @@ class SharedMemoryImageTransport(PubSubTransport):
             if hasattr(data, "__cuda_array_interface__"):
                 try:
                     import cupy as cp  # type: ignore
+
                     data = cp.asnumpy(data)  # D→H
                 except Exception:
                     data = np.array(data, copy=True)
@@ -133,6 +140,7 @@ class SharedMemoryImageTransport(PubSubTransport):
             if self._is_cuda:
                 try:
                     import cupy as cp  # type: ignore
+
                     img_np = cp.asnumpy(view)
                 except Exception:
                     img_np = np.array(view, copy=True)
@@ -174,7 +182,7 @@ class SharedMemoryImageTransport(PubSubTransport):
             "shape": self.shape,
             "dtype": self.dtype.str,
             "backend": "cuda" if self._is_cuda else "cpu",
-            "desc": desc,   # used to reattach on the other side
+            "desc": desc,  # used to reattach on the other side
         }
 
     def __setstate__(self, state):
@@ -198,9 +206,11 @@ class SharedMemoryImageTransport(PubSubTransport):
         if kind == "cuda":
             try:
                 from dimos.utils.ipc_factory import CUDA_IPC_Factory
+
                 self._channel = CUDA_IPC_Factory.attach(desc)
                 self._is_cuda = True
                 import cupy as cp  # type: ignore
+
                 self._cp = cp
             except Exception:
                 # Fallback to CPU attach if CUDA unavailable here
@@ -233,4 +243,3 @@ class SharedMemoryImageTransport(PubSubTransport):
         self._last_seq = -1
         self._desc = desc
         return desc
-
