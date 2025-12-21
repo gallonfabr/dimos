@@ -559,7 +559,7 @@ class MobileBasePBVS(Module):
             retracted_pose,
             ee_pose,
             position_tolerance=self.target_tolerance,
-            orientation_tolerance=0.15,
+            orientation_tolerance=0.1,
         )
         self.last_error_magnitude = error_magnitude
 

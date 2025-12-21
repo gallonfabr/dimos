@@ -64,7 +64,7 @@ class PiperArmRobot(Robot):
         """Start the robot modules."""
         # Start Dimos
         self.dimos = core.start(4)  # Need 4 workers for ZED, Piper, Detection, and Manipulation
-        self.foxglove_bridge = FoxgloveBridge()
+        # self.foxglove_bridge = FoxgloveBridge()
 
         # Enable LCM auto-configuration
         pubsub.lcm.autoconf()
@@ -115,6 +115,7 @@ class PiperArmRobot(Robot):
             track_frame_id=track_frame,  # Use world frame if mobile base enabled
             reach_timeout=10.0,  # Simple timeout for reaching poses
             grasp_distance_range=0.04,
+            pregrasp_distance=0.275,
             enable_mobile_base=self.enable_mobile_base_control,  # Pass mobile base flag
         )
 
@@ -153,7 +154,7 @@ class PiperArmRobot(Robot):
 
         # Start modules
         logger.info("Starting modules...")
-        self.foxglove_bridge.start()
+        # self.foxglove_bridge.start()
         self.stereo_camera.start()
         self.piper_arm.start()
         self.manipulation_interface.start()

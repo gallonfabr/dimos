@@ -47,7 +47,7 @@ from dimos.manipulation.visual_servoing.utils import (
     select_points_from_depth,
     transform_points_3d,
 )
-from dimos.utils.transform_utils import pose_to_matrix, apply_transform
+from dimos.utils.transform_utils import pose_to_matrix, apply_transform, euler_to_quaternion
 from dimos.utils.logging_config import setup_logger
 
 logger = setup_logger("dimos.manipulation.visual_servoing.manipulation_module")
@@ -195,7 +195,7 @@ class ManipulationModule(Module):
         self.max_grasp_pitch_degrees = 80.0
 
         self.grasp_stage = GraspStage.IDLE
-        self.pose_history_size = 4
+        self.pose_history_size = 3
         self.pose_stabilization_threshold = 0.01  # 1cm position stability
         self.reached_poses = deque(maxlen=self.pose_history_size)
 
@@ -557,7 +557,10 @@ class ManipulationModule(Module):
                 continue
             ee_pose = ee_transform.to_pose()
 
-            _, target_reached = is_target_reached(
+            if not self.task_running:
+                return False
+
+            error_magnitude, target_reached = is_target_reached(
                 self.current_executed_pose, ee_pose, position_tolerance=self.pbvs.target_tolerance
             )
 
@@ -567,7 +570,21 @@ class ManipulationModule(Module):
                 return True
 
             time.sleep(0.05)
-        logger.error(f"Failed to reach target pose within {timeout}s")
+        logger.error(
+            f"Failed to reach target pose within {timeout}s of error magnitude {error_magnitude:.3f}m"
+        )
+
+        if self.current_executed_pose and self.current_executed_pose.position.z < 0.1:
+            logger.warning("Z position is negative, executing recovery pose...")
+
+            # Create dump-like recovery pose (similar to execute_dump in piper_tree.py)
+            recovery_position = Vector3(0.42, 0.0, 0.15)  # 42cm forward, 15cm up
+            recovery_orientation = euler_to_quaternion(Vector3(0.0, 110.0, 0.0), degrees=True)
+            recovery_pose = Pose(recovery_position, recovery_orientation)
+
+            # Command the arm to the recovery pose
+            self.arm.cmd_ee_pose(recovery_pose, line_mode=False)
+            time.sleep(2)
 
         if self.grasp_stage == GraspStage.RETRACT or self.grasp_stage == GraspStage.PLACE:
             return True

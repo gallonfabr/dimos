@@ -513,7 +513,7 @@ class UnitreeGo2(Robot):
         if self.enable_lidar_mapping and self.mapper:
             self.websocket_vis.global_costmap.connect(self.mapper.global_costmap)
 
-        self.foxglove_bridge = FoxgloveBridge()
+        self.foxglove_bridge = None  # FoxgloveBridge()
 
     def _deploy_perception(self):
         """Deploy and configure perception modules."""

@@ -66,7 +66,7 @@ class PBVS:
         # Velocity limits
         max_velocity: float = 0.1,  # m/s
         max_angular_velocity: float = 0.5,  # rad/s
-        target_tolerance: float = 0.01,  # 1cm
+        target_tolerance: float = 0.025,  # 2.5cm
         max_tracking_distance_threshold: float = 0.18,  # Max distance for target tracking (m)
         min_size_similarity: float = 0.6,  # Min size similarity threshold (0.0-1.0)
         direct_ee_control: bool = True,  # If True, output target poses instead of velocities

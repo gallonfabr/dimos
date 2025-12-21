@@ -103,12 +103,12 @@ class PiperTree(Robot):
             linear_y_kd=0.1,
             # PID parameters for angular Z (rotation)
             angular_z_kp=0.5,
-            angular_z_ki=0.08,
+            angular_z_ki=0.15,
             angular_z_kd=0.1,
             # Velocity limits
-            max_linear_velocity=0.6,
+            max_linear_velocity=0.4,
             max_angular_velocity=0.5,
-            target_tolerance=0.08,
+            target_tolerance=0.06,
             min_confidence=0.5,
             camera_frame_id="zed_camera_link_optical",
             track_frame_id="world",
@@ -155,7 +155,7 @@ class PiperTree(Robot):
         # Tune ZED camera exposure
         self.rpc_client.call_sync(
             f"{self.ZED_MODULE}/set_exposure",
-            ([40], {}),
+            ([-1], {}),
             rpc_timeout=1.0,
         )
 
@@ -418,7 +418,7 @@ class PiperTree(Robot):
     def execute_dump(self) -> bool:
         """Execute a hardcoded command pose, wait 2 seconds, then open gripper."""
         # Create hardcoded pose
-        position = Vector3(0.42, 0.0, 0.15)  # 15cm forward, 25cm up
+        position = Vector3(0.45, 0.0, 0.15)  # 15cm forward, 25cm up
         orientation = euler_to_quaternion(Vector3(0.0, 110.0, 0.0), degrees=True)
         hardcoded_pose = Pose(position, orientation)
 
