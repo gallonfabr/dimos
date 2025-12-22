@@ -22,12 +22,14 @@ import pytest
 from dimos.stream.audio2.input import microphone
 from dimos.stream.audio2.input.file import file_input
 from dimos.stream.audio2.input.signal import WaveformType, signal
+from dimos.stream.audio2.input.tts_oai import Voice, openai_tts
 from dimos.stream.audio2.operators import normalizer, raw_normalizer, robotize, vumeter
 from dimos.stream.audio2.output.network import network_output
+from dimos.stream.audio2.output.soundcard import speaker
 from dimos.stream.audio2.types import AudioFormat, AudioSpec
 from dimos.utils.data import get_data
 
-host = "10.0.0.191"
+host = "127.0.0.1"
 
 
 @pytest.mark.tool
@@ -83,7 +85,7 @@ def test_network_output_to_server_file():
         file_path=str(get_data("audio_bender") / "out_of_date.wav"),
         realtime=False,  # Fast playback for testing
     ).pipe(
-        robotize(),
+        #        robotize(),
         vumeter(),
         normalizer(),
         network_output(host=host, port=5002, codec="opus"),
@@ -108,3 +110,20 @@ def test_network_mic():
     ).run()
 
     time.sleep(0.2)
+
+
+@pytest.mark.tool
+def test_network_tts():
+    """Test streaming to actual server (requires manual setup)."""
+
+    # To run this test:
+    # 1. Start the server: ./gstreamer_scripts/gstreamer.sh
+    # 2. Run this test with: pytest test_network.py::test_network_output_to_server_file
+
+    openai_tts("Hello from OpenAI").pipe(
+        normalizer(),
+        vumeter(),
+        network_output(host=host, port=5002, codec="opus"),
+    ).run()
+
+    time.sleep(2.2)

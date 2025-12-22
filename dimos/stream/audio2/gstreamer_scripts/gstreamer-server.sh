@@ -16,5 +16,7 @@
 
 gst-launch-1.0 -v \
   udpsrc address=0.0.0.0 port=5002 caps="application/x-rtp,media=audio,encoding-name=OPUS,payload=97" \
+  ! rtpjitterbuffer latency=400 drop-on-latency=false \
   ! rtpopusdepay ! opusdec ! audioconvert ! audioresample \
-  ! autoaudiosink sync=false
+  ! queue max-size-buffers=50 \
+  ! autoaudiosink sync=true

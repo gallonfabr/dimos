@@ -21,5 +21,6 @@ Inputs decode to raw, outputs encode from raw.
 from dimos.stream.audio2.operators.effects import pitch_shift, ring_modulator, robotize
 from dimos.stream.audio2.operators.raw_normalizer import raw_normalizer as normalizer
 from dimos.stream.audio2.operators.raw_vumeter import raw_vumeter as vumeter
+from dimos.stream.audio2.operators.resample import resample
 
-__all__ = ["normalizer", "vumeter", "robotize", "pitch_shift", "ring_modulator"]
+__all__ = ["normalizer", "vumeter", "robotize", "pitch_shift", "ring_modulator", "resample"]

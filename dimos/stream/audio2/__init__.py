@@ -61,13 +61,14 @@ from dimos.stream.audio2.input.signal import WaveformType
 from dimos.stream.audio2.operators import (
     normalizer,
     pitch_shift,
+    resample,
     ring_modulator,
     robotize,
     vumeter,
 )
 
 # Output sinks
-from dimos.stream.audio2.output import network_output, speaker
+from dimos.stream.audio2.output import network_output, speaker, whisperlive_stt, TranscriptionEvent
 
 # Core types
 from dimos.stream.audio2.types import (
@@ -96,9 +97,12 @@ __all__ = [
     "robotize",
     "pitch_shift",
     "ring_modulator",
+    "resample",
     # Outputs
     "speaker",
     "network_output",
+    "whisperlive_stt",
+    "TranscriptionEvent",
     # Types
     "AudioEvent",
     "RawAudioEvent",

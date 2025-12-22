@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # Copyright 2025 Dimensional Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,10 +13,3 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Audio output modules."""
-
-from dimos.stream.audio2.output.network import network_output
-from dimos.stream.audio2.output.soundcard import speaker
-from dimos.stream.audio2.output.whisperlive import whisperlive_stt, TranscriptionEvent
-
-__all__ = ["network_output", "speaker", "whisperlive_stt", "TranscriptionEvent"]
