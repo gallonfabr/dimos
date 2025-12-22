@@ -26,6 +26,7 @@ class SpeechModule(Module):
 
     @skill()
     def say(self, text: str) -> str:
+        """Speak the given text out loud. using TTS."""
         self.syntesizer(text).pipe(robotize(), normalizer(), self.output()).run()
         return f"said {text} out loud"
 
