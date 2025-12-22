@@ -17,13 +17,13 @@
 
 import atexit
 import threading
-from typing import Optional, Any
+from typing import Any, Optional, Union
 
 import gi
 
 gi.require_version("Gst", "1.0")
 from gi.repository import GLib, Gst
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from dimos.stream.audio2.types import AudioFormat, AudioSpec
 from dimos.utils.logging_config import setup_logger
@@ -145,15 +145,66 @@ class GStreamerNodeConfig(BaseModel):
 
     Default output is Vorbis compressed - good compression, low CPU usage,
     excellent quality, and included in GStreamer base plugins. For raw audio, use PCM formats.
+
+    The output field accepts either:
+    - AudioSpec object: AudioSpec(format=AudioFormat.PCM_F32LE, sample_rate=48000, channels=2)
+    - String shortcuts: "raw", "vorbis", "opus", "mp3", "flac", etc.
+    - AudioFormat enum names: "PCM_F32LE", "PCM_S16LE", "VORBIS", etc.
     """
 
-    output: AudioSpec = Field(
+    output: Union[str, AudioSpec] = Field(
         default_factory=lambda: AudioSpec(format=AudioFormat.VORBIS),
-        description="Output audio specification",
+        description="Output audio specification (str or AudioSpec)",
     )
     properties: dict[str, Any] = Field(
         default_factory=dict, description="GStreamer element properties"
     )
+    buffer_time: Optional[int] = Field(
+        default=None, description="Buffer time in microseconds (None = auto)"
+    )
+    latency_time: Optional[int] = Field(
+        default=None, description="Latency time in microseconds (None = auto)"
+    )
+
+    @field_validator("output", mode="before")
+    @classmethod
+    def convert_output_string(cls, v):
+        """Convert string shortcuts to AudioSpec."""
+        if isinstance(v, str):
+            # Shortcut mappings
+            shortcuts = {
+                "raw": AudioFormat.PCM_F32LE,
+                "vorbis": AudioFormat.VORBIS,
+                "opus": AudioFormat.OPUS,
+                "mp3": AudioFormat.MP3,
+                "aac": AudioFormat.AAC,
+                "flac": AudioFormat.FLAC,
+                "webm": AudioFormat.WEBM,
+            }
+
+            # Try lowercase shortcut first
+            lower = v.lower()
+            if lower in shortcuts:
+                return AudioSpec(format=shortcuts[lower])
+
+            # Try as AudioFormat enum name (e.g., "PCM_F32LE", "VORBIS")
+            try:
+                audio_format = AudioFormat[v.upper()]
+                return AudioSpec(format=audio_format)
+            except KeyError:
+                pass
+
+            # Try as AudioFormat enum value (e.g., "S16LE", "audio/mpeg")
+            try:
+                audio_format = AudioFormat(v)
+                return AudioSpec(format=audio_format)
+            except ValueError:
+                raise ValueError(
+                    f"Invalid output format: '{v}'. "
+                    f"Use shortcuts like 'raw', 'vorbis', 'opus', or AudioFormat enum names."
+                )
+
+        return v
 
     class Config:
         """Pydantic config."""

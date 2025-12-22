@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Audio output modules."""
+"""Audio processing operators."""
 
-from dimos.stream.audio2.output.soundcard import speaker
+from dimos.stream.audio2.operators.gst_normalizer import normalizer
+from dimos.stream.audio2.operators.gst_vumeter import vumeter
+from dimos.stream.audio2.operators.raw_normalizer import raw_normalizer
+from dimos.stream.audio2.operators.raw_vumeter import raw_vumeter
 
-__all__ = ["speaker"]
+__all__ = ["normalizer", "vumeter", "raw_normalizer", "raw_vumeter"]

@@ -14,8 +14,8 @@
 
 """Audio input modules."""
 
-from .file import file_input
-from .microphone import microphone
-from .signal import signal
+from dimos.stream.audio2.input.file import file_input
+from dimos.stream.audio2.input.microphone import microphone
+from dimos.stream.audio2.input.signal import signal
 
 __all__ = ["file_input", "microphone", "signal"]

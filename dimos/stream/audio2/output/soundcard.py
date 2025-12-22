@@ -38,12 +38,6 @@ class SoundcardOutputConfig(GStreamerNodeConfig):
     device: Optional[str] = Field(
         default=None, description="Audio device name (None = default device)"
     )
-    buffer_time: Optional[int] = Field(
-        default=None, description="Buffer time in microseconds (None = auto)"
-    )
-    latency_time: Optional[int] = Field(
-        default=None, description="Latency time in microseconds (None = auto)"
-    )
 
 
 class SoundcardOutputNode(GStreamerSinkBase):

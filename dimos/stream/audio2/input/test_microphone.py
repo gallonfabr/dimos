@@ -12,8 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Audio output modules."""
+import threading
+import time
 
-from dimos.stream.audio2.output.soundcard import speaker
+import pytest
+from reactivex import operators as ops
 
-__all__ = ["speaker"]
+from dimos.stream.audio2.input import microphone
+from dimos.stream.audio2.operators import normalizer, vumeter
+from dimos.stream.audio2.output import speaker
+from dimos.stream.audio2.types import AudioFormat, AudioSpec
+
+
+def test_mic_to_speaker():
+    microphone().pipe(normalizer(), vumeter(), speaker()).run()
