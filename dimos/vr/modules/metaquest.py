@@ -173,6 +173,17 @@ class MetaQuestModule(Module):
     async def _publish_controller_data(self, frame: ControllerFrame):
         """Publish controller data to output streams."""
         try:
+            # Publish complete ControllerFrame
+            if self.controller_both:
+                self.controller_both.publish(frame)
+
+            # Publish individual ControllerData for each hand
+            if frame.left and frame.left.connected and self.controller_left:
+                self.controller_left.publish(frame.left)
+
+            if frame.right and frame.right.connected and self.controller_right:
+                self.controller_right.publish(frame.right)
+
             # Publish PoseStamped msg with Pose and Orientation
             if frame.left and frame.left.connected and self.controller_left_pose:
                 # Apply coordinate transform if enabled

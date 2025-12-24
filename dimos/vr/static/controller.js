@@ -431,7 +431,8 @@ function init() {
     updateSceneVisibility();
 
     // Initialize camera feeds
-    initializeCameraFeeds();
+    // DISABLED
+    // initializeCameraFeeds();
 
     window.addEventListener('resize', onWindowResize);
 
@@ -800,36 +801,38 @@ function streamToServer(controllerStates, timestampMs) {
     }
 }
 
-function checkCameraToggle(controllerStates) {
-    if (!controllerStates) return;
-
-    controllerStates.forEach((state, index) => {
-        if (!state || !state.connected) return;
-
-        // Y/B button (index 5) - camera toggle
-        const yPressed = state.buttonValues[5] > BUTTON_PRESS_THRESHOLD;
-        const prevYPressed = previousButtonStates[index].y_or_b;
-        if (yPressed && !prevYPressed) {
-            toggleCameraVisibility();
-        }
-
-        // X/A button (index 4) - passthrough toggle
-        const xPressed = state.buttonValues[4] > BUTTON_PRESS_THRESHOLD;
-        const prevXPressed = previousButtonStates[index].x_or_a;
-        if (xPressed && !prevXPressed) {
-            togglePassthrough();
-        }
-
-        previousButtonStates[index].y_or_b = yPressed;
-        previousButtonStates[index].x_or_a = xPressed;
-    });
-}
+// Button handling disabled - all buttons available for robot control
+// function checkCameraToggle(controllerStates) {
+//     if (!controllerStates) return;
+//
+//     controllerStates.forEach((state, index) => {
+//         if (!state || !state.connected) return;
+//
+//         // Y/B button (index 5) - camera toggle
+//         const yPressed = state.buttonValues[5] > BUTTON_PRESS_THRESHOLD;
+//         const prevYPressed = previousButtonStates[index].y_or_b;
+//         if (yPressed && !prevYPressed) {
+//             toggleCameraVisibility();
+//         }
+//
+//         // X/A button (index 4) - passthrough toggle
+//         const xPressed = state.buttonValues[4] > BUTTON_PRESS_THRESHOLD;
+//         const prevXPressed = previousButtonStates[index].x_or_a;
+//         if (xPressed && !prevXPressed) {
+//             togglePassthrough();
+//         }
+//
+//         previousButtonStates[index].y_or_b = yPressed;
+//         previousButtonStates[index].x_or_a = xPressed;
+//     });
+// }
 
 function animate(_time, frame) {
     const controllerStates = getControllerData(frame);
     if (controllerStates) {
         // Check for camera toggle button press
-        checkCameraToggle(controllerStates);
+        // COMMENTED OUT: Button presses now available for robot control
+        // checkCameraToggle(controllerStates);
 
         controllerStates.forEach((state, index) => {
             updateInfoPanel(index, state);
