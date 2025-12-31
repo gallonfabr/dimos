@@ -555,20 +555,6 @@ class Image(Timestamped):
                 (ros_msg.height, ros_msg.width, format_info["channels"])
             )
 
-        # Crop to center 1/3 of the image (simulate 120-degree FOV from 360-degree)
-        original_width = data_array.shape[1]
-        crop_width = original_width // 3
-        start_x = (original_width - crop_width) // 2
-        end_x = start_x + crop_width
-
-        # Crop the image horizontally to center 1/3
-        if len(data_array.shape) == 2:
-            # Grayscale image
-            data_array = data_array[:, start_x:end_x]
-        else:
-            # Color image
-            data_array = data_array[:, start_x:end_x, :]
-
         # Fix color channel order: if ROS sends RGB but we expect BGR, swap channels
         # ROS typically uses rgb8 encoding, but OpenCV/our system expects BGR
         if format_info["format"] == ImageFormat.RGB:
