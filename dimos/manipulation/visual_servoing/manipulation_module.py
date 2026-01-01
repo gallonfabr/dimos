@@ -30,7 +30,7 @@ from reactivex.disposable import Disposable
 
 from dimos.core import In, Module, Out, rpc
 from dimos.hardware.piper_arm import PiperArm
-from dimos.hardware.so101_arm import SO101Arm
+from dimos.hardware.so101_utils import SO101Arm
 from dimos.manipulation.visual_servoing.detection3d import Detection3DProcessor
 from dimos.manipulation.visual_servoing.pbvs import PBVS
 from dimos.manipulation.visual_servoing.utils import (

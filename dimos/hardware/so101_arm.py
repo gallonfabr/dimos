@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import select
 import sys
 import termios
@@ -19,141 +21,275 @@ import threading
 import time
 import tty
 
-from dimos_lcm.geometry_msgs import Pose, Twist, Vector3
-import kinpy as kp
-from lerobot.motors import Motor, MotorCalibration, MotorNormMode
-from lerobot.motors.feetech import (
-    FeetechMotorsBus,
-    OperatingMode,
-)
 import numpy as np
 import pytest
-from reactivex.disposable import Disposable
-from scipy.spatial.transform import Rotation as R
 
+from dimos_lcm.geometry_msgs import Pose as LCMPose, Twist
 import dimos.core as core
 from dimos.core import In, Module, rpc
-import dimos.protocol.service.lcmservice as lcmservice
+import dimos.protocol.service.lcmservice as lcmservice  # noqa: F401
 from dimos.utils.logging_config import setup_logger
-from dimos.utils.transform_utils import euler_to_quaternion, quaternion_to_euler
+from dimos.utils.transform_utils import euler_to_quaternion, quaternion_to_euler  # noqa: F401
+from dimos.msgs.geometry_msgs import Pose, Vector3  # noqa: F401
+from dimos.hardware.so101_utils.so101_interface import SO101Interface
 
 logger = setup_logger(__file__)
 
 
 class SO101Arm:
-    def __init__(self, arm_name: str = "arm") -> None:
-        pass
+    def __init__(self, arm_name: str = "arm", port: str = "/dev/ttyUSB0") -> None:
+        self.arm_name = arm_name
+        self.arm = SO101Interface(port=port)
+
+        # Connect + configure motors (OperatingMode, PID, etc.)
+        self.arm.connect()
+
+        # Allow time for connection
+        time.sleep(0.5)
+        self.enable()
+
+        # Go to a known configuration
+        self.gotoZero()
+        time.sleep(1)
+
+        # Init velocity controller (Jacobians etc.)
+        self.init_vel_controller()
+
+        # Track last commanded gripper effort for detection heuristic
+        self._last_gripper_effort_cmd = 0.5
+
+    # ---------------- Basic arm management ----------------
 
     def enable(self) -> None:
-        pass
+        while not self.arm.enable():
+            time.sleep(0.01)
+        logger.info("Arm enabled")
 
-    def gotoZero(self) -> None:
-        pass
+    def disable(self) -> None:
+        """Soft-stop and fully disable motors + bus."""
+        self.softStop()
+        self.arm.disable()
+        self.arm.disconnect()
 
-    def gotoObserve(self) -> None:
-        pass
+    def gotoZero(self, duration: float | None = None) -> None:
+        """Move to home position (all joints at 0 rad)."""
+        q_zero = np.zeros(5, dtype=float)
+        self.arm.move_joint_ptp(q_zero, duration=duration)
+        logger.info("Going to zero")
+
+    def gotoObserve(self, duration: float | None = None) -> None:
+        """Move to an 'observe' pose with simple joint interpolation."""
+        observe_angles = np.radians([0.0, -30.0, 30.0, 0.0, 0.0])
+        self.arm.move_joint_ptp(observe_angles, duration=duration)
+        logger.info("Going to observe")
 
     def softStop(self) -> None:
-        pass
+        """Move to zero and then disable torque (no hard 'kill')."""
+        self.gotoZero()
+        time.sleep(1.0)
+        self.arm.disable()
 
-    def cmd_ee_pose_values(self, x, y, z, r, p, y_, line_mode: bool = False) -> None:
-        """Command end-effector to target pose in space (position + Euler angles)"""
-        pass
+    # ---------------- Cartesian pose control ----------------
 
-    def cmd_ee_pose(self, pose: Pose, line_mode: bool = False) -> None:
-        """Command end-effector to target pose using Pose message"""
-        pass
+    def cmd_ee_pose(
+        self,
+        pose: Pose,
+        line_mode: bool = False,
+        duration: float | None = None,
+    ) -> None:
+        """Command end-effector to target pose using Pose message."""
+        self.arm.set_ee_pose(pose, linear=line_mode, duration=duration)
 
-    def get_ee_pose(self):
-        """Return the current end-effector pose as Pose message with position in meters and quaternion orientation"""
-        pass
+    def get_ee_pose(self) -> Pose:
+        """Get current end-effector pose."""
+        return self.arm.get_ee_pose()
 
-    def cmd_gripper_ctrl(self, position, effort: float = 0.25) -> None:
-        """Command end-effector gripper"""
-        pass
+    # ---------------- Gripper control ----------------
 
-    def enable_gripper(self) -> None:
-        """Enable the gripper using the initialization sequence"""
-        pass
+    def cmd_gripper_ctrl(self, position: float, effort: float = 0.25) -> None:
+        """
+        Command gripper position (in meters).
+
+        Args:
+            position: 0.0 (closed) to 0.1 (open) in meters.
+            effort: logical effort in [0,1]; not sent to hardware, but used
+                    for detection thresholds.
+        """
+        self.arm.set_gripper_position(position)
+        self._last_gripper_effort_cmd = effort
 
     def release_gripper(self) -> None:
-        """Release gripper by opening to 100mm (10cm)"""
-        pass
+        """Open gripper to ~max opening."""
+        self.cmd_gripper_ctrl(0.1)
 
     def get_gripper_feedback(self) -> tuple[float, float]:
         """
-        Get current gripper feedback.
+        Get gripper position (meters) and normalized effort (0..1).
 
-        Returns:
-            Tuple of (angle_degrees, effort) where:
-                - angle_degrees: Current gripper angle in degrees
-                - effort: Current gripper effort (0.0 to 1.0 range)
+        Under the hood:
+          - Feetech Present_Load is approx −1000..1000.
+          - We map |load| / 1000 → [0,1].
         """
-        pass
+        position_m, raw_load = self.arm.get_gripper_state()
+        norm_effort = min(1.0, abs(raw_load) / 1000.0)
+        return position_m, norm_effort
 
     def close_gripper(self, commanded_effort: float = 0.5) -> None:
         """
-        Close the gripper.
+        Close gripper to 0.0 m.
+
+        `commanded_effort` is stored and used as a *threshold* in
+        `gripper_object_detected`. It does not send a real torque command.
+        """
+        self._last_gripper_effort_cmd = commanded_effort
+        # Just command closed position; internal servo torque handles gripping
+        self.cmd_gripper_ctrl(0.0, effort=commanded_effort)
+
+    def gripper_object_detected(self, commanded_effort: float | None = None) -> bool:
+        """
+        Heuristic object detection based on Present_Load.
 
         Args:
-            commanded_effort: Effort to use when closing gripper (default 0.25 N/m)
-        """
-        pass
-
-    def gripper_object_detected(self, commanded_effort: float = 0.25) -> bool:
-        """
-        Check if an object is detected in the gripper based on effort feedback.
-
-        Args:
-            commanded_effort: The effort that was used when closing gripper (default 0.25 N/m)
+            commanded_effort: nominal effort you were trying to use [0..1].
+                              If None, uses last commanded effort.
 
         Returns:
-            True if object is detected in gripper, False otherwise
+            True if measured effort exceeds 0.8 * commanded_effort.
         """
-        pass
+        if commanded_effort is None:
+            commanded_effort = self._last_gripper_effort_cmd
 
-    def resetArm(self) -> None:
-        pass
+        _position_m, actual_effort = self.get_gripper_feedback()
+        effort_threshold = 0.8 * commanded_effort
+        return actual_effort > effort_threshold
+
+    # ---------------- Velocity control (task-space) ----------------
 
     def init_vel_controller(self) -> None:
-        pass
+        """Initialize velocity controller with kinematics."""
+        self.kinematics = self.arm.kinematics
+        self.dt = 0.01  # 100 Hz
 
-    def cmd_vel(self, x_dot, y_dot, z_dot, R_dot, P_dot, Y_dot) -> None:
-        pass
+    def cmd_vel(
+        self,
+        x_dot: float,
+        y_dot: float,
+        z_dot: float,
+        R_dot: float,
+        P_dot: float,
+        Y_dot: float,
+    ) -> None:
+        """
+        Command end-effector twist (Cartesian velocity).
 
-    def cmd_vel_ee(self, x_dot, y_dot, z_dot, RX_dot, PY_dot, YZ_dot) -> None:
-        pass
+        Units:
+            - x_dot, y_dot, z_dot: m/s
+            - R_dot, P_dot, Y_dot: rad/s (about X, Y, Z in EE frame)
+        """
+        if not self.kinematics:
+            return
 
-    def disable(self) -> None:
-        pass
+        # Joint angles in radians
+        q = self.arm.get_joint_angles()
+
+        twist = np.array(
+            [x_dot, y_dot, z_dot, R_dot, P_dot, Y_dot],
+            dtype=float,
+        )
+        dq = self.kinematics.joint_velocity(q, twist)
+
+        new_q = q + dq * self.dt
+
+        # Send new joint angles (radians)
+        self.arm.set_joint_angles(new_q)
+        time.sleep(self.dt)
+
+    def cmd_vel_ee(
+        self,
+        x_dot: float,
+        y_dot: float,
+        z_dot: float,
+        RX_dot: float,
+        PY_dot: float,
+        YZ_dot: float,
+    ) -> None:
+        """Alias for cmd_vel with slightly different naming."""
+        self.cmd_vel(x_dot, y_dot, z_dot, RX_dot, PY_dot, YZ_dot)
+
+
+# ---------------- Dimos VelocityController skeleton ----------------
 
 
 class VelocityController(Module):
     cmd_vel: In[Twist] = None
 
-    def __init__(self, arm, period: float = 0.01, *args, **kwargs) -> None:
+    def __init__(
+        self,
+        arm: SO101Arm,
+        period: float = 0.01,
+        *args,
+        **kwargs,
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.arm = arm
         self.period = period
-        self.latest_cmd = None
-        self.last_cmd_time = None
-        self._thread = None
+        self.latest_cmd: Twist | None = None
+        self.last_cmd_time: float | None = None
+        self._thread: threading.Thread | None = None
+        self._stop_flag = False
 
     @rpc
     def start(self) -> None:
-        pass
+        """Start background velocity control loop."""
+        if self._thread is not None:
+            return
+
+        self._stop_flag = False
+
+        def loop() -> None:
+            while not self._stop_flag:
+                if self.latest_cmd is not None:
+                    cmd = self.latest_cmd
+                    self.arm.cmd_vel(
+                        cmd.linear.x,
+                        cmd.linear.y,
+                        cmd.linear.z,
+                        cmd.angular.x,
+                        cmd.angular.y,
+                        cmd.angular.z,
+                    )
+                else:
+                    time.sleep(self.period)
+
+        self._thread = threading.Thread(target=loop, daemon=True)
+        self._thread.start()
 
     @rpc
     def stop(self) -> None:
-        pass
+        """Stop background velocity control loop."""
+        self._stop_flag = True
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
+            self._thread = None
 
     def handle_cmd_vel(self, cmd_vel: Twist) -> None:
-        pass
+        """Callback from Dimos wiring to update latest twist command."""
+        self.latest_cmd = cmd_vel
+        self.last_cmd_time = time.time()
 
 
 @pytest.mark.tool
 def run_velocity_controller() -> None:
-    pass
+    """Simple tool entrypoint; wire into Dimos as needed."""
+    arm = SO101Arm()
+    vc = VelocityController(arm=arm)
+    vc.start()
+    try:
+        while True:
+            time.sleep(1.0)
+    except KeyboardInterrupt:
+        vc.stop()
+        arm.disable()
 
 
 if __name__ == "__main__":
@@ -161,9 +297,19 @@ if __name__ == "__main__":
 
     def get_key(timeout: float = 0.1):
         """Non-blocking key reader for arrow keys."""
-        pass
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            rlist, _, _ = select.select([sys.stdin], [], [], timeout)
+            if rlist:
+                return sys.stdin.read(1)
+            return None
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
-    def teleop_linear_vel(arm) -> None:
-        pass
+    def teleop_linear_vel(arm: SO101Arm) -> None:
+        """Very simple keyboard teleop stub – fill in as you like."""
+        print("Teleop not implemented yet (use get_key and arm.cmd_vel).")
 
     run_velocity_controller()

@@ -19,7 +19,7 @@ from dimos_lcm.sensor_msgs import CameraInfo
 
 from dimos import core
 from dimos.hardware.camera.module import CameraModule
-from dimos.hardware.so101_arm import SO101Arm
+from dimos.hardware.so101_utils import SO101Arm
 from dimos.manipulation.visual_servoing.manipulation_module import ManipulationModule
 from dimos.msgs.sensor_msgs import Image
 from dimos.protocol import pubsub
@@ -55,7 +55,7 @@ class SO101ArmRobot(Robot):
 
         pubsub.lcm.autoconf()
 
-        # Deploy Camera Module
+        # Deploy Camera Module (Can replace with ZED module)
         logger.info("Deploying camera module...")
         self.camera = self.dimos.deploy(
             CameraModule,
