@@ -164,7 +164,7 @@ class OccupancyGridImage:
         line_thickness = max(1, int(min_dimension * 0.005))
 
         # robot position marker
-        cv2.circle(image_arr, (rgx, rgy), robot_radius, (0, 255, 0), -1)
+        cv2.circle(image_arr, (rgx, rgy), robot_radius, (0, 0, 0), -1)
 
         # orientation arrow
         yaw = robot_pose.orientation.euler[2]
@@ -175,7 +175,7 @@ class OccupancyGridImage:
             image_arr,
             (rgx, rgy),
             (rgx + arrow_dx, rgy + arrow_dy),
-            (0, 255, 0),
+            (0, 0, 0),
             line_thickness,
             tipLength=0.5,
         )

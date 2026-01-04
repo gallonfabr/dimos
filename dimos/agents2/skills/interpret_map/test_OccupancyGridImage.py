@@ -110,8 +110,8 @@ def test_grid_to_image_color_mapping():
     )
 
     arr = og_image.image.data
-    # unknown -> yellow [255,255,0]
-    assert (arr[0, 0] == np.array([255, 255, 0], dtype=np.uint8)).all()
+    # unknown -> gray [127, 127, 127]
+    assert (arr[0, 0] == np.array([127, 127, 127], dtype=np.uint8)).all()
 
     # free -> white [255,255,255]
     assert (arr[0, 1] == np.array([255, 255, 255], dtype=np.uint8)).all()

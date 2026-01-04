@@ -1,137 +1,219 @@
 point_placement_tests:
-
 # large office floor plan with noise to irl occupancy grid
   - map_id: "office_noise"
     image_path: "floorplan_office_noise.png"
     resolution: 0.05
     robot_pose:
-      position: [25, 45, 0.0]
+      position: [470, 920, 0] # pixels
       orientation: [0.0, 0.0,  0.7071068, 0.7071068]
     questions:
-      - query: "which room would be the second room to the robot's left along the corridor?"
+      - query: "which would be the furthest room from the robot's current position?"
         expected_range:
-          x: [19, 250]
-          y: [300, 570]
-      - query: "which would be the furthest room from the robot's current position"
+          x: [1300, 1509]
+          y: [477, 859]
+      - query: "which would be the second room to the robot's left along the corridor?"
         expected_range:
-          x: [900, 1006]
-          y: [317, 570]
+          x: [30, 373]
+          y: [665, 854]
       - query: "go to the conference table in the office"
         expected_range:
-          x: [30, 370]
-          y: [5, 230]
-      - query: "a room to accommodate more that 10 people"
+          x: [42, 547]
+          y: [15, 270]
+      - query: "a room to accomodate more than 10 people"
         expected_range:
-          x: [30, 370]
-          y: [5, 230]
+          x: [34, 615]
+          y: [12, 352]
       - query: "smallest room"
         expected_range:
-          x: [890, 1000]
-          y: [450, 570]
-
-# TODO: more qs on robot orientation / placement
+          x: [1290, 1510]
+          y: [478, 861]
+      - query: "a point immediately in front of the robot"
+        expected_range:
+          x: [398, 553]
+          y: [817, 905]
+      - query: "a point immediately behind the robot"
+        expected_range:
+          x: [400, 552]
+          y: [908, 1009]
+      - query: "a point immediately to the left of the robot"
+        expected_range:
+          x: [277, 451]
+          y: [805, 1009]
+      - query: "a point immediately to the right of the robot"
+        expected_range:
+          x: [450, 634]
+          y: [804, 1013]
+      - query: "a point on the robot"
+        expected_range:
+          x: [436, 516]
+          y: [837, 909]
 
 # small office + noise
-
   - map_id: "office_small_noise"
     image_path: "floorplan_office_small_noise.png"
     resolution: 0.05
     robot_pose:
-      position: [25, 13, 0.0]
+      position: [480, 270, 0.0]
       orientation: [0.0, 0.0, 1.0, 0.0]
     questions:
       - query: "which room would be the second room to the robot's left along the corridor?"
         expected_range:
-          x: [535, 802]
-          y: [574, 870]
+          x: [144, 419]
+          y: [314, 462]
       - query: "which would be the furthest room from the robot's current position"
         expected_range:
-          x: [2, 410]
-          y: [26, 873]
+          x: [5, 219]
+          y: [15, 458]
       - query: "go to the largest room"
         expected_range:
-          x: [421, 1019]
-          y: [23, 430]
+          x: [227, 518]
+          y: [12, 238]
+      - query: "a point in front of the robot"
+        expected_range:
+          x: [372, 488]
+          y: [234, 302]
+      - query: "entrance of the top left room"
+        expected_range:
+          x: [70, 164]
+          y: [129, 222]
+      - query: "a point on the robot"
+        expected_range:
+          x: [446, 532]
+          y: [250, 292]
 
 
-# small office + noise + rotated 90 deg
-# robot pointing upwards performs better for queries involving robot orientation
-
+# small office + noise + rotated 90 deg (robot pointing upwards)
   - map_id: "office_small_noise_rotated"
     image_path: "floorplan_office_small_noise_rotated.png"
     resolution: 0.05
     robot_pose:
-      position: [10, 26, 0.0]
+      position: [190, 480, 0.0]
       orientation: [0.0, 0.0,  0.7071068, 0.7071068]
     questions:
       - query: "which room would be the second room to the robot's left along the corridor?"
         expected_range:
-          x: [20, 350]
-          y: [315, 930]
+          x: [10, 149]
+          y: [147, 424]
       - query: "which would be the furthest room from the robot's current position"
         expected_range:
-          x: [624, 956]
-          y: [15, 470]
+          x: [15, 442]
+          y: [2, 214]
       - query: "go to the largest room"
         expected_range:
-          x: [421, 1019]
-          y: [23, 430]
+          x: [228, 453]
+          y: [2, 540]
+      - query: "a point in front of the robot"
+        expected_range:
+          x: [152, 230]
+          y: [403, 483]
+      - query: "a point immediately behind the robot"
+        expected_range:
+          x: [151, 229]
+          y: [487, 544]
+      - query: "a point immediately to the left of the robot"
+        expected_range:
+          x: [93, 189]
+          y: [437, 545]
+      - query: "a point immediately to the right of the robot"
+        expected_range:
+          x: [191, 294]
+          y: [434, 541]
+      - query: "a point on the robot"
+        expected_range:
+          x: [170, 206]
+          y: [466, 501]
 
-# add an unknown / unexplored region to the office map
+
+
+# add an unknown / unexplored region to the office map, check basic queries
 
   - map_id: "office_noise_unknwown"
     image_path: "floorplan_office_noise_unknown.png"
     resolution: 0.05
     robot_pose:
-      position: [25, 45, 0.0]
+      position: [470, 920, 0]
       orientation: [0.0, 0.0,  0.7071068, 0.7071068]
     questions:
-      - query: "which room would be the second room to the robot's left along the corridor?"
+      - query: "which would be the furthest room from the robot's current position?"
         expected_range:
-          x: [19, 250]
-          y: [300, 570]
-      - query: "which would be the furthest room from the robot's current position"
+          x: [1300, 1509]
+          y: [477, 859]
+      - query: "which would be the second room to the robot's left along the corridor?"
         expected_range:
-          x: [900, 1006]
-          y: [317, 570]
-      - query: "go to the conference table in the office"
+          x: [30, 373]
+          y: [665, 854]
+      - query: "smallest room"
         expected_range:
-          x: [30, 370]
-          y: [5, 230]
-      - query: "a room to accommodate more that 10 people"
+          x: [1290, 1510]
+          y: [478, 861]
+      - query: "a point immediately in front of the robot"
         expected_range:
-          x: [30, 370]
-          y: [5, 230]
+          x: [398, 553]
+          y: [817, 905]
+      - query: "a point immediately behind the robot"
+        expected_range:
+          x: [400, 552]
+          y: [908, 1009]
+      - query: "a point immediately to the left of the robot"
+        expected_range:
+          x: [277, 451]
+          y: [805, 1009]
+      - query: "a point immediately to the right of the robot"
+        expected_range:
+          x: [450, 634]
+          y: [804, 1013]
+      - query: "a point on the robot"
+        expected_range:
+          x: [436, 516]
+          y: [837, 909]
 
 
   - map_id: "office_noise_tilt"
     image_path: "floorplan_office_noise_tilt.png"
     resolution: 0.05
     robot_pose:
-      position: [39, 61, 0.0]
+      position: [780, 1140, 0.0]
       orientation: [0.0, 0.0,  0.7071068, 0.7071068]
     questions:
       - query: "which would be the furthest room from the robot's current position"
         expected_range:
-          x: [13, 483]
-          y: [90, 450]
+          x: [7, 280]
+          y: [201, 630]
       - query: "go to the conference table in the office"
         expected_range:
-          x: [455, 844]
-          y: [5, 450]
+          x: [633, 1136]
+          y: [10, 640]
       - query: "a room to accommodate more that 10 people"
         expected_range:
-          x: [455, 844]
-          y: [5, 450]
-
-
+          x: [605, 1197]
+          y: [63, 660]
+      - query: "a point on the robot"
+        expected_range:
+          x: [777, 789]
+          y: [1135, 1143]
+      - query: "a point immediately in front of the robot"
+        expected_range:
+          x: [688, 880]
+          y: [973, 1133]
+      - query: "a point immediately behind the robot"
+        expected_range:
+          x: [688, 899]
+          y: [1156, 1324]
+      - query: "a point immediately to the left of the robot"
+        expected_range:
+          x: [591, 777]
+          y: [1028, 1271]
+      - query: "a point immediately to the right of the robot"
+        expected_range:
+          x: [793, 974]
+          y: [1028, 1271]
 
 map_comprehension_tests:
   - map_id: "office_small_noise"
-    image_path: "floorplan_office_noise.png"
+    image_path: "floorplan_office_small_noise.png"
     resolution: 0.05
     robot_pose:
-      position: [25, 13, 0.0]
+      position: [480, 270, 0.0]
       orientation: [0.0, 0.0, 1.0, 0.0]
     questions:
       - question: "is there any open area for the robot to move behind itself, yes or no?"
@@ -146,9 +228,9 @@ map_comprehension_tests:
         expected_pattern: '.+'
         category: "spatial_understanding"
 
-      - question: "how many rooms are there in the map? give a conservative estimate"
+      - question: "how many rooms are there in the map?"
         expected_pattern: '\b(5|five)\b'
-        category: "robot_awareness"
+        category: "spatial_understanding"
 
       - question: "do all rooms have an entrance or doorway? yes or no?"
         expected_pattern: '\b(yes)\b'
@@ -178,7 +260,7 @@ map_comprehension_tests:
     image_path: "floorplan_office_noise.png"
     resolution: 0.05
     robot_pose:
-      position: [25, 45, 0.0]
+      position: [470, 920, 0]
       orientation: [0.0, 0.0,  0.7071068, 0.7071068]
     questions:
       - question: "is there any open area for the robot to move behind itself, yes or no?"
@@ -222,7 +304,7 @@ map_comprehension_tests:
     image_path: "floorplan_office_noise_unknown.png"
     resolution: 0.05
     robot_pose:
-      position: [25, 45, 0.0]
+      position: [470, 920, 0]
       orientation: [0.0, 0.0,  0.7071068, 0.7071068]
     questions:
       - question: "do you see any unknown areas in the map? yes or no?"

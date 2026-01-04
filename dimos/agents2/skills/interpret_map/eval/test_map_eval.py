@@ -33,6 +33,106 @@ from dimos.utils.generic import extract_json_from_llm_response
 TEST_DIR = Path(__file__).parent
 
 
+class SetupOccupancyGrid:
+    """
+    Helper class to generate OccupancyGrid from image, and produce corresponding OccupancyGridImage object.
+
+    Attributes:
+        image_path (str): Path to the map image file.
+        robot_pose (dict): Robot's pose in the map with keys 'position' (list of 3 floats - X Y Z) and 'orientation' (Quaternion).
+        occupancy_grid (OccupancyGrid): Generated occupancy grid from the image.
+        image (Image | None): Generated OccupancyGridImage from the occupancy grid.
+    """
+
+    def __init__(self, image_path: str, robot_pose: dict) -> None:
+        self.image_path = image_path
+        self.robot_pose = robot_pose
+        self.occupancy_grid = self._occupancy_grid_from_image()
+        self.image: Image | None = None
+
+    def get_image(self):
+        robot_pose = Pose(
+            position=[
+                i * self.occupancy_grid.info.resolution
+                for i in self.robot_pose["position"]  # convert pixels to meters
+            ],
+            orientation=self.robot_pose["orientation"],
+        )
+        width, height = self._get_encoded_image_size()
+
+        og_image = OccupancyGridImage.from_occupancygrid(
+            self.occupancy_grid, flip_vertical=False, robot_pose=robot_pose, size=(width, height)
+        )
+        self.image = og_image.image
+
+        return self.image
+
+    def get_grid_to_image_encoding_scale(self):
+        # scale to convert coordinates from new image back to original occupancy grid / image
+        width, height = self._get_encoded_image_size()
+        width_scale = self.occupancy_grid.info.width / width
+        height_scale = self.occupancy_grid.info.height / height
+        return width_scale, height_scale
+
+    def _get_encoded_image_size(self):
+        # keep max dimension 1024 for encoding
+        MAX_IMAGE_DIMENSION = 1024
+        aspect_ratio = self.occupancy_grid.info.width / self.occupancy_grid.info.height
+        if aspect_ratio >= 1.0:
+            width = MAX_IMAGE_DIMENSION
+            height = int(MAX_IMAGE_DIMENSION / aspect_ratio)
+        else:
+            height = MAX_IMAGE_DIMENSION
+            width = int(MAX_IMAGE_DIMENSION * aspect_ratio)
+        return width, height
+
+    def _occupancy_grid_from_image(self) -> OccupancyGrid:
+        """
+        Build OccupancyGrid from map image`.
+        """
+        # load image
+        image_path = get_data("maps") / self.image_path
+        image = Image.from_file(str(image_path))
+
+        # read image and convert to grid 1:1
+        # expects rgb image with black as obstacles, white as free space and gray as unknown
+        image_arr = image.to_rgb().data
+        height, width = image_arr.shape[:2]
+        grid = np.full((height, width), 100, dtype=np.int8)  # obstacle by default
+
+        # drop alpha channel if present
+        if image_arr.shape[2] == 4:
+            image_arr = image_arr[:, :, :3]
+
+        # define colors and threshold
+        WHITE = np.array([255, 255, 255], dtype=np.float32)
+        GRAY = np.array([127, 127, 127], dtype=np.float32)  # approx RGB for 127 gray
+        white_threshold = 30
+        gray_threshold = 10
+
+        # convert to float32 for distance calculations
+        image_float = image_arr.astype(np.float32)
+
+        # calculate distances to target colors using broadcasting
+        white_dist = np.sqrt(np.sum((image_float - WHITE) ** 2, axis=2))
+        gray_dist = np.sqrt(np.sum((image_float - GRAY) ** 2, axis=2))
+
+        # assign based on closest color within threshold
+        grid[white_dist <= white_threshold] = 0  # Free space
+        grid[gray_dist <= gray_threshold] = -1  # Unknown space
+
+        # build OccupancyGrid object
+        occupancy_grid = OccupancyGrid()
+        occupancy_grid.info.width = width
+        occupancy_grid.info.height = height
+        occupancy_grid.info.resolution = 0.05
+        occupancy_grid.grid = grid
+        occupancy_grid.info.origin.position = Vector3(0.0, 0.0, 0.0)
+        occupancy_grid.info.origin.orientation = Quaternion(0.0, 0.0, 0.0, 1.0)
+
+        return occupancy_grid
+
+
 def load_test_cases(filepath: str):
     import yaml
 
@@ -45,52 +145,6 @@ def load_test_cases(filepath: str):
 @pytest.fixture
 def vl_model():
     return QwenVlModel()
-
-
-def build_occupancygrid_from_image(image: Image, resolution: float = 0.05) -> "OccupancyGrid":
-    image_arr = image.to_rgb().data
-    height, width = image_arr.shape[:2]
-    grid = np.full((height, width), 100, dtype=np.int8)  # obstacle by default
-
-    # drop alpha channel if present
-    if image_arr.shape[2] == 4:
-        image_arr = image_arr[:, :, :3]
-
-    # print(f"top left {image_arr[136:150, 215:250]}")
-
-    # Define colors and threshold
-    WHITE = np.array([255, 255, 255], dtype=np.float32)
-    GRAY = np.array([127, 127, 127], dtype=np.float32)  # approx RGB for 127 gray
-    white_threshold = 30
-    gray_threshold = 10
-
-    # Convert to float32 for distance calculations
-    image_float = image_arr.astype(np.float32)
-
-    # Calculate distances to target colors using broadcasting
-    white_dist = np.sqrt(np.sum((image_float - WHITE) ** 2, axis=2))
-    gray_dist = np.sqrt(np.sum((image_float - GRAY) ** 2, axis=2))
-
-    # Assign based on closest color within threshold
-    grid[white_dist <= white_threshold] = 0  # Free space
-    grid[gray_dist <= gray_threshold] = -1  # Unknown space
-
-    occupancy_grid = OccupancyGrid()
-    occupancy_grid.info.width = width
-    occupancy_grid.info.height = height
-    occupancy_grid.info.resolution = resolution
-    occupancy_grid.grid = grid
-    occupancy_grid.info.origin.position = Vector3(0.0, 0.0, 0.0)
-    occupancy_grid.info.origin.orientation = Quaternion(0.0, 0.0, 0.0, 1.0)
-
-    return occupancy_grid
-
-
-def occupancy_grid_from_image(image_path) -> OccupancyGrid:
-    image_path = get_data("maps") / image_path
-    image = Image.from_file(str(image_path))
-    occupancy_grid = build_occupancygrid_from_image(image, resolution=0.05)
-    return occupancy_grid
 
 
 def extract_coordinates(point: dict | None) -> list | str:
@@ -108,10 +162,10 @@ def goal_placement_prompt(description: str) -> str:
     prompt = (
         "Look at this image carefully \n"
         "it represents a noisy 2D occupancy grid map where,\n"
-        " - white area is free space, \n"
-        " - gray area is unexplored space, \n"
-        " - red areas are obstacles, \n"
-        " - green circle represents the robot's position and the attached arrow indicates its orientation. \n"
+        " - white pixels represent free space, \n"
+        " - gray pixels represent unexplored space, \n"
+        " - red pixels are obstacles, \n"
+        " - black circle represents the robot's position and the attached arrow indicates the direction it is facing. \n"
         f"Identify a location in free space based on the following description: {description}\n"
         "Return ONLY a JSON object with this exact format:\n"
         '{"point": [x, y]}\n'
@@ -125,15 +179,16 @@ def interpretability_prompt(question: str) -> str:
     prompt = (
         "Look at this image carefully \n"
         "it represents a noisy 2D occupancy grid map where,\n"
-        " - white area is free space, \n"
-        " - gray area is unknown space, \n"
-        " - red areas are obstacles/walls, \n"
-        " - green circle represents the robot's position and the attached arrow indicates its orientation. \n"
+        " - white pixels represent free space, \n"
+        " - gray pixels represent unexplored space, \n"
+        " - red pixels are obstacles, \n"
+        " - black circle represents the robot's position and the attached arrow indicates the direction it is facing. \n"
         f"Answer the following question based on this image: {question}\n"
     )
     return prompt
 
 
+# main tests
 @pytest.mark.parametrize(
     "test_map",
     [
@@ -144,44 +199,73 @@ def interpretability_prompt(question: str) -> str:
     ],
 )
 def test_point_placement(test_map, vl_model):
-    occupancy_grid = occupancy_grid_from_image(test_map["image_path"])
+    """
+    Evaluate the VL model's ability to identify positions on occupancy grid images.
 
-    # set robot pose for testing
-    robot_pose = Pose(
-        position=test_map["robot_pose"]["position"],
-        orientation=test_map["robot_pose"]["orientation"],
+    Every instance of test_map has:
+    - map_id: str - unique identifier for the map
+    - image_path: str - path to the occupancy grid image file
+    - robot_pose: dict - robot's pose in the map with keys 'position' (list of 3 floats - X Y Z) and 'orientation' (Quaternion)
+    - questions: list of dict
+        - query: str - description of the goal position to identify
+        - expected_range: dict - expected pixel coordinate ranges with keys 'x' (list of 2 ints) and 'y' (list of 2 ints)
+    """
+
+    # setup
+    grid_generator = SetupOccupancyGrid(
+        image_path=test_map["image_path"], robot_pose=test_map["robot_pose"]
     )
+    image = grid_generator.get_image()
+    width_scale, height_scale = grid_generator.get_grid_to_image_encoding_scale()
 
-    og_image = OccupancyGridImage.from_occupancygrid(
-        occupancy_grid, flip_vertical=False, robot_pose=robot_pose
-    )
-    image = og_image.image
-
+    # query and score responses
     score = 0
+    failed = []
+
     for qna in test_map["questions"]:
         prompt = goal_placement_prompt(qna["query"])
         response = vl_model.query(image, prompt)
         point = extract_json_from_llm_response(response)
         x, y = extract_coordinates(point)
 
-        # keep track of score
         expected_area = qna["expected_range"]
-        if (expected_area["x"][0] <= x <= expected_area["x"][1]) and (
-            expected_area["y"][0] <= y <= expected_area["y"][1]
+
+        x_px = round(x * width_scale)
+        y_px = round(y * height_scale)
+
+        if (
+            expected_area["x"][0] <= x_px <= expected_area["x"][1]
+            and expected_area["y"][0] <= y_px <= expected_area["y"][1]
         ):
             score += 1
         else:
-            print(f"query {qna['query']} response {response}")
+            debug_path = f"./{test_map['map_id']}_{qna['query'].replace(' ', '_')}.png"
+
             debug_image_with_identified_point(
                 image.to_opencv(),
                 (x, y),
-                filepath=f"./{test_map['map_id']}_{qna['query'].replace(' ', '_')}.png",
+                filepath=debug_path,
             )
 
-    print(f"Map {test_map['map_id']} point placement score: {score}/{len(test_map['questions'])}")
-    # TODO: adjust these thresholds after adding more qnas in dataset
-    assert score >= len(test_map["questions"]) * 0.25, (
-        f"Goal placement score too low: {score}/{len(test_map['questions'])}"
+            failed.append(
+                f"Query:\n  {qna['query']}\n"
+                f"Predicted (px): ({x_px}, {y_px})\n"
+                f"Expected X range: {expected_area['x']}\n"
+                f"Expected Y range: {expected_area['y']}\n"
+                f"Debug image: {debug_path}\n"
+            )
+
+    total = len(test_map["questions"])
+    pass_rate = score / total
+
+    assert pass_rate >= 0.25, (
+        "\n"
+        f"Goal placement score too low for map '{test_map['map_id']}'\n"
+        f"Score: {score}/{total} ({pass_rate:.1%})\n"
+        "\n"
+        "Incorrectly identified points:\n"
+        "------------------------------\n"
+        f"{''.join(failed)}"
     )
 
 
@@ -195,21 +279,26 @@ def test_point_placement(test_map, vl_model):
     ],
 )
 def test_map_comprehension(test_map, vl_model):
-    occupancy_grid = occupancy_grid_from_image(test_map["image_path"])
+    """
+    Evaluate the VL model's ability to answer questions about occupancy grid images.
 
-    # set robot pose for testing
-    robot_pose = Pose(
-        position=test_map["robot_pose"]["position"],
-        orientation=test_map["robot_pose"]["orientation"],
+    Every instance of test_map has:
+    - map_id: str - unique identifier for the map
+    - image_path: str - path to the occupancy grid image file
+    - robot_pose: dict - robot's pose in the map with keys 'position' (list of 3 floats - X Y Z) and 'orientation' (Quaternion)
+    - questions: list of dict
+        - question: str - question about the map
+        - expected_pattern: str - regex pattern that the answer should match
+    """
+    # setup
+    grid_generator = SetupOccupancyGrid(
+        image_path=test_map["image_path"], robot_pose=test_map["robot_pose"]
     )
-
-    og_image = OccupancyGridImage.from_occupancygrid(
-        occupancy_grid, flip_vertical=False, robot_pose=robot_pose
-    )
-    image = og_image.image
+    image = grid_generator.get_image()
 
     # query and score responses
     responses = {}
+    failed = []
     score = 0
     for qna in test_map["questions"]:
         prompt = interpretability_prompt(qna["question"])
@@ -218,11 +307,19 @@ def test_map_comprehension(test_map, vl_model):
         if re.search(qna["expected_pattern"], response, re.IGNORECASE):
             score += 1
         else:
-            print(f"Q: {qna['question']}\nA: {response}\n")
+            failed.append(f"Q: {qna['question']}\nA: {response}\n")
 
-    print(f"Map {test_map['map_id']} interpretability score: {score}/{len(test_map['questions'])}")
-    assert score >= len(test_map["questions"]) * 0.7, (
-        f"Map interpretability score too low: {score}/{len(test_map['questions'])}. Responses: {responses}"
+    total = len(test_map["questions"])
+    pass_rate = score / total
+
+    assert pass_rate >= 0.7, (
+        "\n"
+        f"Map interpretability score too low for map '{test_map['map_id']}'\n"
+        f"Score: {score}/{total} ({pass_rate:.1%})\n"
+        "\n"
+        "Failed responses:\n"
+        "-----------------\n"
+        f"{''.join(failed)}"
     )
 
 
