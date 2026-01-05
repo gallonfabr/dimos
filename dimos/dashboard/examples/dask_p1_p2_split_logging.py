@@ -105,6 +105,7 @@ def dashboard_process(stop_event_name: str) -> None:
 
 
 def log_stream_process(name: str, path_str: str, start_event_name: str) -> None:
+    print(f"""log process {name} started""")
     start_event = Event(start_event_name)
     rc = RerunConnection()
     path = Path(path_str)
@@ -132,10 +133,15 @@ def log_stream_process(name: str, path_str: str, start_event_name: str) -> None:
                 print(f"[Dask Logging {name}] error: {error}")
 
 
+def process2(*args):
+    print("""process2 started""")
+    return
+
+
 def main() -> None:
     # At least 3 workers so dashboard + color + lidar each get their own process.
     cluster = LocalCluster(
-        n_workers=3,
+        n_workers=1,
         threads_per_worker=1,
         processes=True,
         dashboard_address=None,
@@ -148,10 +154,9 @@ def main() -> None:
     start_event = Event(start_event_name, client=client)
 
     dashboard_future = client.submit(dashboard_process, stop_event_name, pure=False)
-    # Give the dashboard/grpc server a moment to spin up before logging.
-    time.sleep(1.5)
+    print("starting color_future")  # <- this prints before "dashboard_process" starts
     color_future = client.submit(
-        log_stream_process,
+        process2,
         "color_image",
         "./dimos/dashboard/support/color_image.yaml",
         start_event_name,

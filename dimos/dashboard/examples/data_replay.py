@@ -88,8 +88,7 @@ class DataReplay(Module):
                 if self._stop_event.is_set():
                     break
                 if output and output.transport:
-                    if i % 20 == 0:
-                        print(f"[DataReplay] publishing {output_name} message {i}")
+                    print(f"[DataReplay] publishing {output_name} message {i}")
                     rc.log(f"/{output_name}", msg.to_rerun(), strict=True)
                     output.publish(msg)  # type: ignore[no-untyped-call]
                 # time.sleep(self.interval_sec)
