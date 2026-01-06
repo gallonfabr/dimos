@@ -25,6 +25,7 @@ import pytest
 
 from dimos.agents2.skills.interpret_map import OccupancyGridImage
 from dimos.core import LCMTransport
+
 # from dimos.models.vl.moondream import MoondreamVlModel
 # from dimos.models.vl.openai import OpenAIVlModel
 from dimos.models.vl.qwen import QwenVlModel
@@ -189,24 +190,20 @@ def goal_placement_prompt(description: str, robot_pixel_coord: tuple[int, int]) 
         "it represents a 2D map percieved from above (like a floor plan).\n"
         " - white pixels represent free space, \n"
         " - gray pixels represent unexplored space, \n"
-        " - black pixels are obstacles and walls, \n"
+        " - black pixels are obstacles like walls, furniture or noise \n"
         " - green circle represents the robot.\n"
         " - Note: The image may contain some noise or artifacts, ignore them and focus on clear structural patterns.\n"
-
         "The image has been rotated so that the robot always faces straight upwards.\n"
         "- The robot's front is towards the of the image.\n"
         "- The robot's back is towards the bottom.\n"
         "- The robot's left is towards the left.\n"
         "- The robot's right is towards the right.\n"
-        
         f"Identify a location in free space based on the following description: {description}\n"
         f"Metadata - pixel coordinates of robot (x, y): {robot_pixel_coord}\n"
-                
         "Guildelines for identified location: \n"
-        " - the point should be reacheable by the robot following a reasonable path through free space, it should not be surrounded by walls on all sides.\n"
-        " - NEVER place the point on thick walls, obstacles or unexplored space.\n"
-        " - maintain clearance of few pixels and find the nearest clear location that still matches the general direction and description.\n"
-        
+        " - the point should be reacheable by the robot following a reasonable path through free space.\n"
+        " - NEVER place the point ON walls, obstacles or unexplored space.\n"
+        " - find the nearest clear location that still matches the general direction and description.\n"
         "Return ONLY a JSON object with this exact format:\n"
         '{"point": [x, y]}\n'
         f"where x,y are the pixel coordinates of the identified location in the image. \n"
@@ -218,16 +215,17 @@ def goal_placement_prompt(description: str, robot_pixel_coord: tuple[int, int]) 
 def interpretability_prompt(question: str) -> str:
     prompt = (
         "Look at this image carefully \n"
-        "it represents a 2D map perceived by a robot from above (like a floor plan).\n"
+        "it represents a 2D map percieved from above (like a floor plan).\n"
         " - white pixels represent free space, \n"
         " - gray pixels represent unexplored space, \n"
-        " - black pixels are obstacles and walls, \n"
-        " - red pixels represent the robot.\n"
-        "The image has been rotated so that the robot always faces straight upwards."
-        "- The robot's front is towards the of the image."
-        "- The robot's back is towards the bottom."
-        "- The robot's left is towards the left."
-        "- The robot's right is towards the right."
+        " - black pixels are obstacles, walls or furniture, \n"
+        " - green circle represents the robot.\n"
+        " - Note: The image may contain some noise or artifacts, ignore them and focus on clear structural patterns.\n"
+        "The image has been rotated so that the robot always faces straight upwards.\n"
+        "- The robot's front is towards the of the image.\n"
+        "- The robot's back is towards the bottom.\n"
+        "- The robot's left is towards the left.\n"
+        "- The robot's right is towards the right.\n"
         f"Answer the following question based on this image: {question}\n"
     )
     return prompt
