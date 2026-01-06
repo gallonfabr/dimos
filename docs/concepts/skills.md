@@ -31,9 +31,8 @@ Finally, if there's information you want to get to an agent, you need to do that
 
 At a high level, skills are wrappers over lower-level robot capabilities. But at a more prosaic level, a skill is just a method on a Module decorated with `@skill` that:
 
-1. **Becomes an agent-callable tool** - The decorator generates an OpenAI-compatible function schema from the method signature and docstring
-2. **Executes in background threads** - Skills run concurrently without blocking the agent
-3. **Reports state via messages** - Each execution tracks state (pending → running → completed/error)
+1. **Becomes an agent-callable tool** - The decorator generates a tool schema from the method signature and docstring
+2. **Executes asynchronously** - Skills run without blocking the agent
 
 <!-- Citation: dimos/protocol/skill/skill.py:65-113 - @skill decorator implementation -->
 
@@ -68,7 +67,7 @@ class RobotSkills(Module):
 ```
 
 > [!NOTE]
-> For most scenarios, you can avoid having to repeat the `set_LlmAgent_register_skills` boilerplate by  subclassing `SkillModule` (which is just `Module` plus the `set_LlmAgent_register_skills` method shown above).
+> For most scenarios, you can avoid repeating the `set_LlmAgent_register_skills` boilerplate by subclassing `SkillModule` (which is just `Module` plus the `set_LlmAgent_register_skills` method shown above).
 
 ### How skills reach agents
 
@@ -83,7 +82,7 @@ See these tutorials for examples:
 
 We've seen how skills can be made available to agents as tools they can call. Often, however, we don't just want agents making tool calls -- we also want to relay updates from the tool calls, from the skills, back to the agent.
 
-Some of this behavior already comes as a default: if you decorate the method with `@skill()`, the agent will be notified with the *return value* of the method when the skill finishes (because the default value of the `ret` parameter is `Return.call_agent`).
+Some of this behavior already comes as a default: if you decorate the method with `@skill()`, the agent will be notified with the *return value* of the method when the skill finishes.
 
 ### Notifying the agent whenever there's updates
 
@@ -92,7 +91,7 @@ But often we want to update the agent not just when the skill is finished, but a
 This can be done by making  the method a generator and setting the `stream` parameter of `@skill` to `Stream.call_agent`:
 
 ```python
-@skill(stream=Stream.call_agent, reducer=Reducer.string)
+@skill(stream=Stream.call_agent)
 def goto(self, x: float, y: float):
     """Move the robot in relative coordinates.
     x is forward, y is left.
