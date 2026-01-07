@@ -364,6 +364,10 @@ def test_manipulation_module(
     elif enable_viz:
         wait_for_user("Press Enter to exit...")
 
+    # Clean up the module to stop background threads
+    print("\n15. Stopping module...")
+    module.stop()
+
 
 def main():
     """Run the test."""
