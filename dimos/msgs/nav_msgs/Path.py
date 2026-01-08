@@ -30,6 +30,7 @@ try:
     from nav_msgs.msg import Path as ROSPath  # type: ignore[attr-defined]
 except ImportError:
     ROSPath = None  # type: ignore[assignment, misc]
+import rerun as rr
 
 from dimos.msgs.geometry_msgs.PoseStamped import PoseStamped
 from dimos.types.timestamped import Timestamped
@@ -231,3 +232,26 @@ class Path(Timestamped):
             ros_msg.poses.append(pose.to_ros_msg())
 
         return ros_msg
+
+    def to_rerun(  # type: ignore[no-untyped-def]
+        self,
+        color: tuple[int, int, int] = (0, 255, 128),
+        z_offset: float = 0.2,
+        radii: float = 0.05,
+    ):
+        """Convert to rerun LineStrips3D format.
+
+        Args:
+            color: RGB color tuple for the path line
+            z_offset: Height above floor to render path (default 0.2m to avoid costmap occlusion)
+            radii: Thickness of the path line (default 0.05m = 5cm)
+
+        Returns:
+            rr.LineStrips3D archetype for logging to rerun
+        """
+        if not self.poses:
+            return rr.LineStrips3D([])
+
+        # Lift path above floor so it's visible over costmap
+        points = [[p.x, p.y, p.z + z_offset] for p in self.poses]
+        return rr.LineStrips3D([points], colors=[color], radii=radii)

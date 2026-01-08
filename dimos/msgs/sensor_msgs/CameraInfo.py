@@ -20,6 +20,7 @@ import time
 from dimos_lcm.sensor_msgs import CameraInfo as LCMCameraInfo
 from dimos_lcm.std_msgs.Header import Header
 import numpy as np
+import rerun as rr
 
 # Import ROS types
 try:
@@ -97,6 +98,29 @@ class CameraInfo(Timestamped):
         self.roi_height = 0
         self.roi_width = 0
         self.roi_do_rectify = False
+
+    def with_ts(self, ts: float) -> CameraInfo:
+        """Return a copy of this CameraInfo with the given timestamp.
+
+        Args:
+            ts: New timestamp
+
+        Returns:
+            New CameraInfo instance with updated timestamp
+        """
+        return CameraInfo(
+            height=self.height,
+            width=self.width,
+            distortion_model=self.distortion_model,
+            D=self.D.copy(),
+            K=self.K.copy(),
+            R=self.R.copy(),
+            P=self.P.copy(),
+            binning_x=self.binning_x,
+            binning_y=self.binning_y,
+            frame_id=self.frame_id,
+            ts=ts,
+        )
 
     @classmethod
     def from_yaml(cls, yaml_file: str) -> CameraInfo:
@@ -370,6 +394,28 @@ class CameraInfo(Timestamped):
             and self.binning_x == other.binning_x
             and self.binning_y == other.binning_y
             and self.frame_id == other.frame_id
+        )
+
+    def to_rerun(self, image_plane_distance: float = 0.5):  # type: ignore[no-untyped-def]
+        """Convert to Rerun Pinhole archetype for camera frustum visualization.
+
+        Args:
+            image_plane_distance: Distance to draw the image plane in the frustum
+
+        Returns:
+            rr.Pinhole archetype for logging to Rerun
+        """
+        # Extract intrinsics from K matrix
+        # K = [fx, 0, cx, 0, fy, cy, 0, 0, 1]
+        fx, fy = self.K[0], self.K[4]
+        cx, cy = self.K[2], self.K[5]
+
+        return rr.Pinhole(
+            focal_length=[fx, fy],
+            principal_point=[cx, cy],
+            width=self.width,
+            height=self.height,
+            image_plane_distance=image_plane_distance,
         )
 
 
