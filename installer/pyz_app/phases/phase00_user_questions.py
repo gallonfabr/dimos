@@ -161,6 +161,18 @@ def phase0(cli_features: list[str] | None = None) -> tuple[dict[str, object], li
             if not system_analysis.get("docker", {}).get("exists"):
                 p.error("Docker is not installed or not detected.")
                 print("Download Docker: https://www.docker.com/products/docker-desktop/")
+                # print("Alternatively you can likely run this in a different terminal to get docker installed:")
+                # print(
+                #     "    # Install Docker\n"+
+                #     "    curl -fsSL https://get.docker.com -o get-docker.sh\n"+
+                #     "    sudo sh get-docker.sh\n"+
+                #     "    \n"+
+                #     "    # Post-install steps\n"+
+                #     "    sudo groupadd docker\n"+
+                #     "    sudo usermod -aG docker $USER\n"+
+                #     "    newgrp docker\n"+
+                #     ""
+                # )
                 next_step = p.pick_one(
                     "Docker is required for this option.",
                     options={"back": "Choose a different install method", "exit": "Exit installer"},

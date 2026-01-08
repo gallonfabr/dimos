@@ -44,6 +44,16 @@ def phase1(system_analysis, selected_features) -> str | None:
     else:
         mention_system_dependencies(deps["human_names_from_apt"])
 
+    if "cuda" in selected_features:
+        print()
+        print("So, you picked CUDA")
+        print("Please make sure the following are installed:")
+        print("    - CUDA drivers (11.x or higher)")
+        print("    - CUDA toolkit (11.x or higher)")
+        if "sim" in selected_features:
+            print("    - CUDA-enabled simulation backend (nvidia-cuda-toolkit)")
+        p.confirm("Press enter once you have these installed")
+        
     print()
     print()
 
