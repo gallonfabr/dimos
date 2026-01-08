@@ -232,7 +232,9 @@ def is_valid_apt_package_name(name: str) -> bool:
     )
     return not bool(res.returncode)
 
+
 gave_missing_cli_warning = False
+
 
 @cache()
 def get_valid_nixpkgs_attr_name(name: str) -> str | None:
