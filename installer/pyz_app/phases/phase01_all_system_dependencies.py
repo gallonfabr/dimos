@@ -104,7 +104,6 @@ def phase1(system_analysis, selected_features) -> str | None:
         p.warning("Which means sadly I'm unable to auto-install native dependencies for you.")
         print("HOWEVER!")
         print("You can still do a docker or nix flake based install")
-        
 
     print()
     print()
