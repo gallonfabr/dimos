@@ -23,7 +23,7 @@ from xarm.wrapper import XArmAPI
 from dimos.core.transport import LCMTransport
 from dimos.msgs.sensor_msgs import Image
 from dimos.msgs.sensor_msgs.image_impls.AbstractImage import ImageFormat
-from dimos.msgs.sensor_msgs import JointState
+from dimos.msgs.sensor_msgs import JointState, JointCommand
 
 ACTION_HORIZON = 15
 ACTION_CHUNK = None
@@ -75,7 +75,7 @@ def get_observation():
     return {
         "observation/exterior_image_1_left": get_camera_image(),  # ADD SECOND CAMERA IN BLUEPRINT DEFINED WITH SERIAL NUMBER
         "observation/wrist_image_left": get_camera_image(),
-        "observation/joint_position": get_xarm_joint_positions(),
+        "observation/joint_position": xarm_to_franka(get_xarm_joint_positions()),
         "observation/gripper_position": 0.0,
         "prompt": "move the arm slightly to the left",
     }
@@ -96,6 +96,7 @@ def run_inference():
     Run inference loop until user interrupts
     """
     actions_from_chunk_completed = 0
+    joint_cmd_pub = LCMTransport("/xarm/joint_position_command", JointCommand)
     while True:
         if actions_from_chunk_completed == 0 or actions_from_chunk_completed >= ACTION_HORIZON:
             actions_from_chunk_completed = 0
@@ -109,11 +110,11 @@ def run_inference():
             action_chunk[:, :-1] *= dt
             action_chunk[:, :-1] = np.cumsum(
                 action_chunk[:, :-1], axis=0
-            )  # integrate to get delta position in radians
-            current_joint_positions = np.array(arm.get_servo_angle()[1])
+            )  # integrate to get delta position in radians, franka
+            current_joint_positions = np.array(get_xarm_joint_positions())
             action_chunk[:, :-1] += current_joint_positions
             action_chunk[:, :-1] *= 360 / (2 * np.pi)  # convert to degrees
-            ACTION_CHUNK = action_chunk
+            ACTION_CHUNK = franka_to_xarm(action_chunk[:, :-1])
             GRIPPER_CHUNK = action_chunk[:, 7]
             GRIPPER_CHUNK = np.where(GRIPPER_CHUNK > 0.5, 0.0, GRIPPER_CHUNK)
 
@@ -122,8 +123,10 @@ def run_inference():
         actions_from_chunk_completed += 1
 
         print(f"Setting joint positions: {action[:7]} and gripper position: {gripper_xarm}")
-        arm.set_servo_angle(angle=action[:7], speed=10, wait=False)
-        # arm.set_gripper_position(pos=gripper_xarm, speed=50, wait=False)
+        joint_positions_rad = np.deg2rad(action[:7]).tolist()
+        joint_cmd_pub.broadcast(None, JointCommand(joint_positions_rad))
+
+        time.sleep(.2)
 
 
 if __name__ == "__main__":
