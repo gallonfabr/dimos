@@ -52,12 +52,13 @@ def xarm_driver(**config: Any) -> Any:
     """Create a blueprint for XArmSimDriver.
 
     Args:
-        **config: Configuration parameters passed to XArmDriver
+        **config: Configuration parameters passed to XArmSimDriver
             - dof: Degrees of freedom - 5, 6, or 7 (default: 6)
             - has_gripper: Whether gripper is attached (default: False)
             - has_force_torque: Whether F/T sensor is attached (default: False)
             - control_rate: Control loop + joint feedback rate in Hz (default: 100)
             - monitor_rate: Robot state monitoring rate in Hz (default: 10)
+            - robot_description: robot_descriptions name for Menagerie model
 
     Returns:
         Blueprint configuration for XArmSimDriver
@@ -80,6 +81,7 @@ xarm7_trajectory_sim = autoconnect(
         has_force_torque=False,
         control_rate=100,
         monitor_rate=10,
+        robot_description="xarm7_mj_description",
     ),
     joint_trajectory_controller(
         control_frequency=100.0,

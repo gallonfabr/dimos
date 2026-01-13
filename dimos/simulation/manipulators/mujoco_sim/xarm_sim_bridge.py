@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import math
-from pathlib import Path
 import threading
 import time
 from typing import TYPE_CHECKING, Optional
@@ -48,12 +47,14 @@ class XArmSimBridge(MujocoSimBridgeBase):
         report_type: str,
         joint_state_rate: float,
         control_frequency: float,
+        robot_description: str | None = None,
     ):
         # Initialize base class (loads model, sets up threading, etc.)
         super().__init__(
             robot_name="xarm",
             num_joints=num_joints,
             control_frequency=control_frequency,
+            robot_description=robot_description,
         )
 
         self._is_radian = is_radian

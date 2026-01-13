@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING
 
 import mujoco
 import mujoco.viewer as viewer
+from robot_descriptions.loaders.mujoco import load_robot_description
 
 from dimos.simulation.manipulators.mujoco_sim.constants import (
     DEFAULT_CONTROL_FREQUENCY,
@@ -37,13 +38,7 @@ from dimos.simulation.manipulators.mujoco_sim.constants import (
     THREAD_JOIN_TIMEOUT,
     VELOCITY_STOP_THRESHOLD,
 )
-from dimos.simulation.manipulators.mujoco_sim.model_utils import load_manipulator_model
 from dimos.utils.logging_config import setup_logger
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
-    pass
 
 logger = setup_logger()
 
@@ -67,7 +62,7 @@ class MujocoSimBridgeBase(ABC):
         robot_name: str,
         num_joints: int,
         control_frequency: float = DEFAULT_CONTROL_FREQUENCY,
-        model_path: Path | str | None = None,
+        robot_description: str | None = None,
     ):
         """
         Initialize the MuJoCo simulation bridge.
@@ -76,8 +71,7 @@ class MujocoSimBridgeBase(ABC):
             robot_name: Name of the robot (e.g., "piper", "xarm")
             num_joints: Number of joints in the robot arm
             control_frequency: Control frequency in Hz
-            model_path: Optional explicit path to MuJoCo model XML file.
-                       If None, will be found automatically.
+            robot_description: robot_descriptions name to load from Menagerie.
         """
         self._robot_name = robot_name
         self._num_joints = num_joints
@@ -88,11 +82,8 @@ class MujocoSimBridgeBase(ABC):
         )
 
         # Load MuJoCo model
-        self._model, self._data = load_manipulator_model(
-            robot_name=robot_name,
-            num_joints=num_joints,
-            model_path=model_path,
-        )
+        self._model = load_robot_description(robot_description)
+        self._data = mujoco.MjData(self._model)
 
         # --- State variables --- #
         self._connected: bool = False

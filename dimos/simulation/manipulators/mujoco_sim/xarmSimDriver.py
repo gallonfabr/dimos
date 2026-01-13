@@ -54,6 +54,9 @@ class XArmSimSDKWrapper(BaseManipulatorSDK):
             control_rate = config.get("control_rate", 100)
             report_type = config.get("report_type", "dev")
             joint_state_rate = config.get("joint_state_rate", control_rate)
+            robot_description = config.get("robot_description")
+            if not robot_description:
+                raise ValueError("robot_description is required for MuJoCo simulation loading")
 
             self.logger.info(f"Connecting to XArm Sim (DOF: {self.dof})...")
             self.native_sdk = XArmSimBridge(
@@ -63,6 +66,7 @@ class XArmSimSDKWrapper(BaseManipulatorSDK):
                 report_type=str(report_type),
                 joint_state_rate=float(joint_state_rate),
                 control_frequency=float(control_rate),
+                robot_description=robot_description,
             )
             self.native_sdk.connect()
 
@@ -288,6 +292,7 @@ class XArmSimDriver(BaseManipulatorDriver):
             "monitor_rate",
             "report_type",
             "joint_state_rate",
+            "robot_description",
         ]
         for param in driver_params:
             if param in kwargs:
@@ -330,6 +335,7 @@ def get_blueprint() -> dict[str, Any]:
             "monitor_rate": 10,
             "report_type": "dev",
             "joint_state_rate": 100,
+            "robot_description": None,
         },
         "inputs": {
             "joint_position_command": "JointCommand",
