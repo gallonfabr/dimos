@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import logging
-from pathlib import Path
 from threading import Thread
 import time
 from typing import Any, Protocol
@@ -40,13 +39,9 @@ from dimos.robot.unitree.connection.connection import UnitreeWebRTCConnection
 from dimos.robot.unitree_webrtc.type.lidar import LidarMessage
 from dimos.utils.data import get_data
 from dimos.utils.decorators.decorators import simple_mcache
-from dimos.utils.logging_config import setup_logger
 from dimos.utils.testing import TimedSensorReplay, TimedSensorStorage
 
-logger = setup_logger(level=logging.INFO)
-
-# URDF path for Go2 robot
-_GO2_URDF = Path(__file__).parent.parent / "go2" / "go2.urdf"
+logger = logging.getLogger(__name__)
 
 
 class Go2ConnectionProtocol(Protocol):
@@ -212,13 +207,14 @@ class GO2Connection(Module, spec.Camera, spec.Pointcloud):
 
         self.connection.start()
 
-        # Initialize Rerun world frame and load URDF (only if Rerun backend)
+        # Connect this worker process to Rerun if it will log sensor data.
         if self._global_config.viewer_backend.startswith("rerun"):
-            self._init_rerun_world()
+            connect_rerun(global_config=self._global_config)
 
         def onimage(image: Image) -> None:
             self.color_image.publish(image)
-            rr.log("world/robot/camera/rgb", image.to_rerun())
+            if self._global_config.viewer_backend.startswith("rerun"):
+                rr.log("world/robot/camera/rgb", image.to_rerun())
 
         self._disposables.add(self.connection.lidar_stream().subscribe(self.lidar.publish))
         self._disposables.add(self.connection.odom_stream().subscribe(self._publish_tf))
@@ -233,67 +229,6 @@ class GO2Connection(Module, spec.Camera, spec.Pointcloud):
 
         self.standup()
         # self.record("go2_bigoffice")
-
-    def _init_rerun_world(self) -> None:
-        """Set up Rerun world frame, load URDF, and static assets.
-
-        Does NOT compose blueprint - that's handled by ModuleBlueprintSet.build().
-        """
-        connect_rerun(global_config=self._global_config)
-
-        # Global view coordinates (applies to views at/under this origin).
-        rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
-
-        # Attach semantic entity paths to the named TF frame graph without explicitly
-        # introducing `tf#/...` strings into the code.
-        #
-        # - `world` entity path: its implicit frame (tf#/world) is a child of the named frame "world".
-        # - `world/robot` entity path: its implicit frame (tf#/world/robot) is a child of the named frame "base_link".
-        rr.log(
-            "world",
-            rr.Transform3D(
-                translation=[0.0, 0.0, 0.0],
-                rotation=rr.Quaternion(xyzw=[0.0, 0.0, 0.0, 1.0]),
-                parent_frame="world",  # type: ignore[call-arg]
-            ),
-            static=True,
-        )
-        rr.log(
-            "world/robot",
-            rr.Transform3D(
-                translation=[0.0, 0.0, 0.0],
-                rotation=rr.Quaternion(xyzw=[0.0, 0.0, 0.0, 1.0]),
-                parent_frame="base_link",  # type: ignore[call-arg]
-            ),
-            static=True,
-        )
-
-        # Load robot URDF
-        if _GO2_URDF.exists():
-            rr.log_file_from_path(
-                str(_GO2_URDF),
-                entity_path_prefix="world/robot",
-                static=True,
-            )
-            logger.info(f"Loaded URDF from {_GO2_URDF}")
-
-        # Visual axes attached to the robot (moves via the `world/robot` attachment above).
-        rr.log("world/robot/axes", rr.TransformAxes3D(0.5), static=True)  # type: ignore[attr-defined]
-
-        # Attach camera entity to the named TF frame "camera_optical" so the frustum + image
-        # move purely via TF, not via manual rr.Transform3D logging in the data path.
-        rr.log(
-            "world/robot/camera",
-            rr.Transform3D(
-                translation=[0.0, 0.0, 0.0],
-                rotation=rr.Quaternion(xyzw=[0.0, 0.0, 0.0, 1.0]),
-                parent_frame="camera_optical",  # type: ignore[call-arg]
-            ),
-            static=True,
-        )
-
-        # Log static camera pinhole (for frustum)
-        rr.log("world/robot/camera", _camera_info_static().to_rerun(), static=True)
 
     @rpc
     def stop(self) -> None:

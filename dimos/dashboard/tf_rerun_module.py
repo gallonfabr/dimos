@@ -30,16 +30,18 @@ Usage:
         )
 """
 
-from collections.abc import Callable
+from collections.abc import Sequence
 import threading
 import time
-from typing import Any
+from typing import Any, cast
 
 import rerun as rr
 
 from dimos.core import Module, rpc
+from dimos.core.blueprints import ModuleBlueprintSet, autoconnect
 from dimos.core.global_config import GlobalConfig
 from dimos.dashboard.rerun_init import connect_rerun
+from dimos.dashboard.rerun_scene_wiring import rerun_scene_wiring
 from dimos.utils.logging_config import setup_logger
 
 logger = setup_logger()
@@ -128,4 +130,43 @@ class TFRerunModule(Module):
         super().stop()
 
 
-tf_rerun = TFRerunModule.blueprint
+def tf_rerun(
+    *,
+    poll_hz: float = 30.0,
+    scene: bool = True,
+    # Scene wiring kwargs (only used if scene=True)
+    world_entity: str = "world",
+    robot_entity: str = "world/robot",
+    robot_axes_entity: str = "world/robot/axes",
+    world_frame: str = "world",
+    robot_frame: str = "base_link",
+    urdf_path: str | None = None,
+    axes_size: float | None = 0.5,
+    cameras: Sequence[tuple[str, str, Any]] = (),
+    camera_rgb_suffix: str = "rgb",
+) -> ModuleBlueprintSet:
+    """Convenience blueprint: TF snapshot polling + (optional) static scene wiring.
+
+    - TF visualization stays in `TFRerunModule` (poll TF buffer, log to `world/tf/*`).
+    - Scene wiring is handled by `RerunSceneWiringModule` (view coords, attachments, URDF, pinholes).
+    """
+    tf_bp = cast("ModuleBlueprintSet", TFRerunModule.blueprint(poll_hz=poll_hz))
+    if not scene:
+        return tf_bp
+
+    scene_bp = cast(
+        "ModuleBlueprintSet",
+        rerun_scene_wiring(
+            world_entity=world_entity,
+            robot_entity=robot_entity,
+            robot_axes_entity=robot_axes_entity,
+            world_frame=world_frame,
+            robot_frame=robot_frame,
+            urdf_path=urdf_path,
+            axes_size=axes_size,
+            cameras=cameras,
+            camera_rgb_suffix=camera_rgb_suffix,
+        ),
+    )
+
+    return autoconnect(tf_bp, scene_bp)

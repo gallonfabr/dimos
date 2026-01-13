@@ -114,13 +114,44 @@ On `dev`, the default layout is composed from modules’ `rerun_views()` contrib
 If you `rr.log("some/new/entity", ...)` but don’t see it where you expect:
 - it may not be included by any existing view panel, so add a `rerun_views()` panel that points at your entity path.
 
-### TF visualization: snapshot polling (no subscriptions, rate-controlled)
+### TF visualization + scene wiring: the `tf_rerun()` helper
 
 The intended pattern for TF visualization on `dev` is:
 
 - **Publish transforms normally** via `self.tf.publish(...)` (TF is available on every module).
-- The TF visualization module **polls** the TF buffer at a configurable rate and logs a snapshot view:
-  - [`dimos/dashboard/tf_rerun_module.py`](/dimos/dashboard/tf_rerun_module.py#L103) polls `self.tf.buffers` and logs the latest transform per edge under `world/tf/{child}`.
+- In blueprints, add `tf_rerun(...)` which composes two modules:
+  1. **`TFRerunModule`**: Polls `self.tf.buffers` at a configurable rate and logs the latest transform per edge under `world/tf/{child}` using `Transform.to_rerun()`.
+  2. **`RerunSceneWiringModule`**: Logs static scene setup (view coordinates, entity-path attachments, optional URDF, axes, camera pinholes).
+
+The `tf_rerun()` helper accepts scene configuration:
+
+```python
+from dimos.dashboard.tf_rerun_module import tf_rerun
+
+# Default: TF polling + minimal scene wiring (world + world/robot attachments)
+tf_rerun()
+
+# With URDF and camera:
+tf_rerun(
+    urdf_path=Path("path/to/robot.urdf"),
+    cameras=[
+        ("world/robot/camera", "camera_optical", GO2Connection.camera_info_static),
+    ],
+)
+
+# Multi-camera robot:
+tf_rerun(
+    cameras=[
+        ("world/robot/cameras/front", "cam_front_optical", front_cam_info),
+        ("world/robot/cameras/left",  "cam_left_optical",  left_cam_info),
+        ("world/robot/cameras/right", "cam_right_optical", right_cam_info),
+        ("world/robot/cameras/rear",  "cam_rear_optical",  rear_cam_info),
+    ],
+)
+
+# Disable scene wiring entirely (TF polling only):
+tf_rerun(scene=False)
+```
 
 ### Entity paths vs TF frames
 
@@ -136,7 +167,7 @@ In DimOS on `dev`:
 **Rule of thumb**:
 - Put geometry and sensor data under semantic paths (e.g. `world/robot/**`, `world/nav/**`).
 - Drive motion through TF by emitting transforms via `self.tf.publish(...)`.
-- If you need a semantic entity to “live in” a particular TF frame (e.g. camera frustum under `camera_optical`), attach it explicitly (see how GO2 attaches the camera entity in [`dimos/robot/unitree/connection/go2.py`](/dimos/robot/unitree/connection/go2.py#L70)).
+- If you need a semantic entity to "live in" a particular TF frame (e.g. camera frustum under `camera_optical`), configure it via `tf_rerun(cameras=[...])` which handles the attachment in [`dimos/dashboard/rerun_scene_wiring.py`](/dimos/dashboard/rerun_scene_wiring.py#L20).
 
 ### Cameras: pinhole projection vs lens distortion
 
@@ -179,6 +210,20 @@ This appendix is an **inventory of every current Rerun touchpoint** in the repos
   - **File**: [`dimos/dashboard/tf_rerun_module.py`](/dimos/dashboard/tf_rerun_module.py)
   - **What**: Polls `self.tf.buffers` at a configurable rate (`poll_hz`) and logs the latest transform per TF edge to `world/tf/{child}` using `Transform.to_rerun()`.
 
+- **Scene wiring module (static setup)**
+  - **File**: [`dimos/dashboard/rerun_scene_wiring.py`](/dimos/dashboard/rerun_scene_wiring.py)
+  - **What**: Logs all static Rerun scene setup once at startup:
+    - View coordinates (`rr.ViewCoordinates.RIGHT_HAND_Z_UP`)
+    - Entity-path attachments under named TF frames (`world` → `world`, `world/robot` → `base_link`)
+    - Optional URDF load under `world/robot`
+    - Optional axes gizmo at `world/robot/axes`
+    - Camera entity-path attachments + pinholes (configurable via tuple list)
+  - **Why**: Keeps robot modules focused on I/O + TF publishing; centralizes visualization scene wiring.
+
+- **`tf_rerun()` helper (composed blueprint)**
+  - **File**: [`dimos/dashboard/tf_rerun_module.py`](/dimos/dashboard/tf_rerun_module.py)
+  - **What**: Returns a `ModuleBlueprintSet` that composes `TFRerunModule` + `RerunSceneWiringModule` via `autoconnect(...)`. Blueprints add one line (`tf_rerun(...)`) to get both TF polling and scene wiring.
+
 - **TF message → Rerun entity mapping**
   - **File**: [`dimos/msgs/tf2_msgs/TFMessage.py`](/dimos/msgs/tf2_msgs/TFMessage.py)
   - **What**: `TFMessage.to_rerun()` returns `(entity_path, rr.Transform3D)` pairs for each transform, currently under `world/tf/{child_frame_id}`.
@@ -189,15 +234,14 @@ This appendix is an **inventory of every current Rerun touchpoint** in the repos
 
 ### Robot/device visualization (GO2)
 
-- **GO2 connection: static assets + camera pinhole/image logging**
+- **GO2 connection: sensor data logging + TF publishing**
   - **File**: [`dimos/robot/unitree/connection/go2.py`](/dimos/robot/unitree/connection/go2.py)
   - **What**:
-    - Connects to Rerun via `connect_rerun()`.
-    - Logs global view coordinates at `world` (`rr.ViewCoordinates.RIGHT_HAND_Z_UP`).
-    - Loads the robot URDF under `world/robot` via `rr.log_file_from_path(..., entity_path_prefix="world/robot")`.
-    - Logs a static axes gizmo at `world/robot/axes`.
-    - Attaches the camera entity to the TF frame `camera_optical` (so TF drives motion), logs static pinhole on `world/robot/camera`, and logs images to `world/robot/camera/rgb`.
+    - Connects to Rerun via `connect_rerun()` (only to log sensor data).
+    - Publishes TF transforms via `self.tf.publish(...)` (base_link, camera_link, camera_optical).
+    - Logs camera images to `world/robot/camera/rgb`.
     - Contributes a camera panel via `rerun_views()` (`rrb.Spatial2DView(origin="world/robot/camera/rgb")`).
+  - **Note**: Static scene setup (view coordinates, URDF, axes, camera entity attachments, pinholes) is handled by `RerunSceneWiringModule` via `tf_rerun(...)` in the blueprint. GO2 no longer does this directly.
 
 ### Mapping/navigation visualization (modules)
 
