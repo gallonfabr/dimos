@@ -53,11 +53,14 @@ class ROS(PubSub[ROSTopic, Any]):
     native LCM and other pubsub implementations.
     """
 
-    def __init__(self, node_name: str = "dimos_ros_pubsub") -> None:
+    def __init__(
+        self, node_name: str = "dimos_ros_pubsub", qos: "QoSProfile | None" = None
+    ) -> None:
         """Initialize the ROS pubsub.
 
         Args:
             node_name: Name for the ROS node
+            qos: Optional QoS profile (defaults to BEST_EFFORT for throughput)
         """
         if not ROS_AVAILABLE:
             raise ImportError("rclpy is not installed. ROS pubsub requires ROS 2.")
@@ -73,13 +76,16 @@ class ROS(PubSub[ROSTopic, Any]):
         self._subscriptions: dict[str, list[tuple[Any, Callable[[Any, ROSTopic], None]]]] = {}
         self._lock = threading.Lock()
 
-        # QoS profile optimized for throughput
-        self._qos = QoSProfile(
-            reliability=QoSReliabilityPolicy.BEST_EFFORT,  # Faster than RELIABLE
-            history=QoSHistoryPolicy.KEEP_LAST,
-            durability=QoSDurabilityPolicy.VOLATILE,
-            depth=1,  # Minimal queue for low latency
-        )
+        # QoS profile - use provided or default to best-effort for throughput
+        if qos is not None:
+            self._qos = qos
+        else:
+            self._qos = QoSProfile(
+                reliability=QoSReliabilityPolicy.BEST_EFFORT,
+                history=QoSHistoryPolicy.KEEP_LAST,
+                durability=QoSDurabilityPolicy.VOLATILE,
+                depth=1,
+            )
 
     def start(self) -> None:
         """Start the ROS node and executor."""
