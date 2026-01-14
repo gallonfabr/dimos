@@ -29,7 +29,7 @@ from dimos.msgs.geometry_msgs.PoseStamped import PoseStamped
 from dimos.msgs.nav_msgs import Path
 from dimos.msgs.sensor_msgs import Image
 from dimos.navigation.base import NavigationState
-from dimos.navigation.replanning_a_star.controllers import Controller, PController
+from dimos.navigation.replanning_a_star.controllers import Controller, PiController
 from dimos.navigation.replanning_a_star.navigation_map import NavigationMap
 from dimos.navigation.replanning_a_star.path_clearance import PathClearance
 from dimos.navigation.replanning_a_star.path_distancer import PathDistancer
@@ -87,7 +87,7 @@ class LocalPlanner(Resource):
         self._navigation_map = navigation_map
         self._goal_tolerance = goal_tolerance
 
-        self._controller = PController(
+        self._controller = PiController(
             self._global_config,
             self._speed,
             self._control_frequency,
@@ -243,6 +243,7 @@ class LocalPlanner(Resource):
         if abs(yaw_error) < self._orientation_tolerance:
             with self._lock:
                 self._change_state("path_following")
+                self._controller.reset_errors()
             return self._compute_path_following()
 
         return self._controller.rotate(yaw_error)
@@ -273,6 +274,7 @@ class LocalPlanner(Resource):
             logger.info("Reached goal position, starting final rotation")
             with self._lock:
                 self._change_state("final_rotation")
+                self._controller.reset_errors()
             return self._compute_final_rotation()
 
         closest_index = path_distancer.find_closest_point_index(current_pos)

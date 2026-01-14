@@ -154,3 +154,49 @@ class PdController(PController):
         self._prev_angular_velocity = angular_velocity
 
         return float(angular_velocity)
+
+
+class PiController(PController):
+    _k_integral: float = 0.8
+    _integral_limit: float = 0.2  # Limit to prevent integral windup.
+
+    _integral_error: float
+    _prev_angular_velocity: float
+
+    def __init__(self, global_config: GlobalConfig, speed: float, control_frequency: float):
+        super().__init__(global_config, speed, control_frequency)
+
+        self._integral_error = 0.0
+        self._prev_angular_velocity = 0.0
+
+    def reset_errors(self) -> None:
+        self._integral_error = 0.0
+        self._prev_angular_velocity = 0.0
+
+    def reset_yaw_error(self, value: float) -> None:
+        self._integral_error = 0.0
+
+    def _compute_angular_velocity(self, yaw_error: float) -> float:
+        dt = 1.0 / self._control_frequency
+
+        # Accumulate integral error with anti-windup clamping
+        self._integral_error += yaw_error * dt
+        self._integral_error = np.clip(self._integral_error, -self._integral_limit, self._integral_limit)
+
+        # PI control: proportional + integral
+        angular_velocity = self._k_angular * yaw_error + self._k_integral * self._integral_error
+
+        # Rate limiting: limit angular acceleration to prevent jerky corrections
+        max_delta = self._max_angular_accel * dt
+        angular_velocity = np.clip(
+            angular_velocity,
+            self._prev_angular_velocity - max_delta,
+            self._prev_angular_velocity + max_delta,
+        )
+
+        angular_velocity = np.clip(angular_velocity, -self._speed, self._speed)
+        angular_velocity = self._apply_min_velocity(angular_velocity, self._min_angular_velocity)
+
+        self._prev_angular_velocity = angular_velocity
+
+        return float(angular_velocity)
