@@ -33,6 +33,7 @@ from dimos.perception.detection.detectors.types import Detector
 from dimos.perception.detection.type import ImageDetections2D
 from dimos.perception.detection.type.detection2d.seg import Detection2DSeg
 from dimos.utils.data import get_data
+
 # Note: Don't use dimos.utils.gpu_utils.is_cuda_available - it uses pycuda, not torch
 from dimos.utils.logging_config import setup_logger
 
@@ -256,20 +257,15 @@ class EdgeTAMProcessor(Detector):
         Returns:
             ImageDetections2D with tracked object segmentation masks
         """
-        import time as _time
-
         if not self.is_tracking or self.inference_state is None:
             return ImageDetections2D(image=image)
 
         self.frame_count += 1
 
         # Append new frame to inference state
-        t0 = _time.perf_counter()
         new_frame_tensor = self._prepare_frame(image)
-        t1 = _time.perf_counter()
         self.inference_state["images"].append(new_frame_tensor)
         self.inference_state["num_frames"] += 1
-        logger.info(f"_prepare_frame took {(t1-t0)*1000:.1f}ms, num_frames={self.inference_state['num_frames']}")
 
         # Memory management
         cached_features = self.inference_state["cached_features"]
@@ -286,7 +282,6 @@ class EdgeTAMProcessor(Detector):
 
         detections: ImageDetections2D = ImageDetections2D(image=image)  # type: ignore[type-arg]
 
-        t2 = _time.perf_counter()
         with torch.no_grad():
             if self.use_bf16:
                 with torch.autocast("cuda", dtype=torch.bfloat16):
@@ -294,16 +289,12 @@ class EdgeTAMProcessor(Detector):
                         self.inference_state, start_frame_idx=self.frame_count, max_frame_num_to_track=1
                     ):
                         if out_frame_idx == self.frame_count:
-                            t3 = _time.perf_counter()
-                            logger.info(f"propagate_in_video took {(t3-t2)*1000:.1f}ms")
                             return self._process_results(image, out_obj_ids, out_mask_logits)
             else:
                 for out_frame_idx, out_obj_ids, out_mask_logits in self.predictor.propagate_in_video(
                     self.inference_state, start_frame_idx=self.frame_count, max_frame_num_to_track=1
                 ):
                     if out_frame_idx == self.frame_count:
-                        t3 = _time.perf_counter()
-                        logger.info(f"propagate_in_video took {(t3-t2)*1000:.1f}ms")
                         return self._process_results(image, out_obj_ids, out_mask_logits)
 
         return detections
