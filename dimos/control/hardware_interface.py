@@ -59,6 +59,15 @@ class HardwareInterface(Protocol):
         """
         ...
 
+    def read_ee_position(self) -> dict[str, float] | None:
+        """Read end-effector position.
+
+        Returns:
+            Dict with keys: x, y, z (meters), roll, pitch, yaw (radians)
+            None if not supported
+        """
+        ...
+
     def write_command(self, commands: dict[str, float], mode: ControlMode) -> bool:
         """Write commands to hardware.
 
@@ -150,6 +159,15 @@ class BackendHardwareInterface:
             name: (positions[i], velocities[i], efforts[i])
             for i, name in enumerate(self._joint_names)
         }
+
+    def read_ee_position(self) -> dict[str, float] | None:
+        """Read end-effector position.
+
+        Returns:
+            Dict with keys: x, y, z (meters), roll, pitch, yaw (radians)
+            None if not supported
+        """
+        return self._backend.read_cartesian_position()
 
     def write_command(self, commands: dict[str, float], mode: ControlMode) -> bool:
         """Write commands - allows partial joint sets, holds last for missing.

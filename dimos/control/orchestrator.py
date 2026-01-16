@@ -359,6 +359,19 @@ class ControlOrchestrator(Module[ControlOrchestratorConfig]):
                     positions[joint_name] = pos
             return positions
 
+    @rpc
+    def get_ee_positions(self) -> dict[str, dict[str, float] | None]:
+        """Get end-effector positions for all hardware.
+
+        Returns:
+            Dict mapping hardware_id -> {x, y, z, roll, pitch, yaw} or None if not supported
+        """
+        with self._hardware_lock:
+            positions: dict[str, dict[str, float] | None] = {}
+            for hw_id, hw in self._hardware.items():
+                positions[hw_id] = hw.read_ee_position()
+            return positions
+
     # =========================================================================
     # Task Management (RPC)
     # =========================================================================
