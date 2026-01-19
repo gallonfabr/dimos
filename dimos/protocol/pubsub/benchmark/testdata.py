@@ -196,7 +196,8 @@ try:
 
     def dds_msggen(size: int) -> tuple[DDSTopic, DDSBenchmarkMessage]:
         topic = DDSTopic(topic="benchmark/dds", dds_type=DDSBenchmarkMessage)
-        msg = DDSBenchmarkMessage(payload=make_data(size).decode("latin-1"))
+        msg = DDSBenchmarkMessage()
+        msg.payload = make_data(size).decode("latin-1")
         return (topic, msg)
 
     testdata.append(
