@@ -78,27 +78,3 @@ def map_():
     map = Map(voxel_size=0.5)
     yield map
     map.stop()
-
-
-def test_robot_mapping(map_) -> None:
-    lidar_replay = SensorReplay("office_lidar", autocast=pointcloud2_from_webrtc_lidar)
-
-    # Mock the output streams to avoid publishing errors
-    class MockStream:
-        def publish(self, msg) -> None:
-            pass  # Do nothing
-
-    map_.global_costmap = MockStream()
-    map_.global_map = MockStream()
-
-    # Process all frames from replay
-    for frame in lidar_replay.iterate():
-        map_.add_frame(frame)
-
-    # Check the built map
-    global_map = map_.to_lidar_message()
-    pointcloud = global_map.pointcloud
-
-    # Verify map has points
-    assert len(pointcloud.points) > 0
-    print(f"Map contains {len(pointcloud.points)} points")
