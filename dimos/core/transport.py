@@ -26,6 +26,7 @@ from typing import (
 )
 
 from dimos.core.stream import In, Out, Stream, Transport
+from dimos.msgs.protocol import DimosMsg
 from dimos.protocol.pubsub.jpeg_shm import JpegSharedMemory
 from dimos.protocol.pubsub.lcmpubsub import LCM, JpegLCM, PickleLCM, Topic as LCMTopic
 from dimos.protocol.pubsub.rospubsub import DimosROS, ROSTopic
@@ -213,15 +214,15 @@ class JpegShmTransport(PubSubTransport[T]):
     def stop(self) -> None: ...
 
 
-class ROSTransport(PubSubTransport[T]):
+class ROSTransport(PubSubTransport[DimosMsg]):
     _started: bool = False
     _ros: DimosROS | None = None
 
-    def __init__(self, topic: str, msg_type: type, **kwargs) -> None:  # type: ignore[no-untyped-def]
+    def __init__(self, topic: str, msg_type: type[DimosMsg], **kwargs: Any) -> None:
         super().__init__(ROSTopic(topic, msg_type))
         self._kwargs = kwargs
 
-    def __reduce__(self):  # type: ignore[no-untyped-def]
+    def __reduce__(self) -> tuple[Any, ...]:
         return (ROSTransport, (self.topic.topic, self.topic.msg_type))
 
     def _ensure_started(self) -> DimosROS:
@@ -232,13 +233,17 @@ class ROSTransport(PubSubTransport[T]):
             self._started = True
         return self._ros
 
-    def broadcast(self, _, msg) -> None:  # type: ignore[no-untyped-def]
-        ros = self._ensure_started()
-        ros.publish(self.topic, msg)
+    def broadcast(self, _: Out[DimosMsg], msg: DimosMsg) -> None:
+        if not self._started or self._ros is None:
+            raise RuntimeError("ROSTransport not started, call start() first")
+        self._ros.publish(self.topic, msg)
 
-    def subscribe(self, callback: Callable[[T], None], selfstream: In[T] = None) -> None:  # type: ignore[assignment, override]
-        ros = self._ensure_started()
-        return ros.subscribe(self.topic, lambda msg, topic: callback(msg))  # type: ignore[arg-type, return-value]
+    def subscribe(
+        self, callback: Callable[[DimosMsg], Any], selfstream: Stream[DimosMsg] | None = None
+    ) -> Callable[[], None]:
+        if not self._started or self._ros is None:
+            raise RuntimeError("ROSTransport not started, call start() first")
+        return self._ros.subscribe(self.topic, lambda msg, topic: callback(msg))
 
     def start(self) -> None:
         self._ensure_started()
