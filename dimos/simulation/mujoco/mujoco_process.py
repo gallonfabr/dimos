@@ -29,8 +29,9 @@ from numpy.typing import NDArray
 import open3d as o3d  # type: ignore[import-untyped]
 
 from dimos.core.global_config import GlobalConfig
-from dimos.msgs.sensor_msgs import PointCloud2
-from dimos.simulation.mujoco.constants import (
+from dimos.msgs.geometry_msgs import Vector3
+from dimos.robot.unitree_webrtc.type.lidar import LidarMessage
+from dimos.simulation.manipulators.constants import (
     DEPTH_CAMERA_FOV,
     LIDAR_FPS,
     LIDAR_RESOLUTION,
@@ -39,8 +40,12 @@ from dimos.simulation.mujoco.constants import (
     VIDEO_WIDTH,
 )
 from dimos.simulation.mujoco.depth_camera import depth_image_to_point_cloud
-from dimos.simulation.mujoco.model import load_model, load_scene_xml
-from dimos.simulation.mujoco.person_on_track import PersonPositionController
+from dimos.simulation.mujoco.model import (
+    load_bundle_json,
+    load_model,
+    load_model_sdk2,
+    load_scene_xml,
+)
 from dimos.simulation.mujoco.shared_memory import ShmReader
 from dimos.utils.logging_config import setup_logger
 
@@ -75,8 +80,38 @@ def _run_simulation(config: GlobalConfig, shm: ShmReader) -> None:
     if robot_name == "unitree_go2":
         robot_name = "unitree_go1"
 
-    controller = MockController(shm)
-    model, data = load_model(controller, robot=robot_name, scene_xml=load_scene_xml(config))
+    # Only use a MuJoCo profile bundle when explicitly requested.
+    # Otherwise fall back to the legacy behavior (menagerie assets + <robot>.xml include).
+    profile = config.mujoco_profile
+    scene_xml = load_scene_xml(config)
+
+    # SDK2 bridge for direct motor control via DDS
+    sdk2_bridge = None
+
+    if config.mujoco_control_mode == "sdk2":
+        # SDK2 mode: load model without ONNX policy, use DDS bridge for control
+        # SDK2BridgeController is created later, after mj_forward updates sensors
+        model, data = load_model_sdk2(
+            robot=robot_name,
+            scene_xml=scene_xml,
+            profile=profile,
+        )
+        # Debug: verify keyframe was applied in load_model_sdk2
+        logger.info(
+            "SDK2 model loaded",
+            nkey=model.nkey,
+            qpos_joints_0_5=data.qpos[7:13].tolist(),
+            expected_joints=[-0.312, 0, 0, 0.669, -0.363, 0],
+        )
+    else:
+        # ONNX policy mode (default): use shared memory controller
+        controller = MockController(shm)
+        model, data = load_model(
+            controller,
+            robot=robot_name,
+            scene_xml=scene_xml,
+            profile=profile,
+        )
 
     if model is None or data is None:
         raise ValueError("Failed to load MuJoCo model: model or data is None")
@@ -95,17 +130,78 @@ def _run_simulation(config: GlobalConfig, shm: ShmReader) -> None:
 
     mujoco.mj_forward(model, data)
 
-    camera_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "head_camera")
-    lidar_camera_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "lidar_front_camera")
+    # Create SDK2 bridge AFTER mj_forward so sensors are updated from keyframe
+    if config.mujoco_control_mode == "sdk2":
+        # Debug: verify qpos and sensordata after mj_forward
+        logger.info(
+            "After mj_forward",
+            qpos_joints_0_5=data.qpos[7:13].tolist(),
+            sensordata_0_5=data.sensordata[0:6].tolist(),
+        )
+        from dimos.simulation.mujoco.sdk2_bridge import (
+            SDK2BridgeConfig,
+            SDK2BridgeController,
+        )
+        sdk2_bridge = SDK2BridgeController(
+            model,
+            data,
+            SDK2BridgeConfig(
+                domain_id=config.sdk2_domain_id,
+                interface=config.sdk2_interface,
+                robot_type=robot_name.replace("unitree_", ""),  # "g1" -> "g1"
+            ),
+        )
+        logger.info(
+            "SDK2 bridge mode enabled",
+            domain_id=config.sdk2_domain_id,
+            interface=config.sdk2_interface,
+        )
 
-    person_position_controller = PersonPositionController(model)
-
-    lidar_left_camera_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "lidar_left_camera")
-    lidar_right_camera_id = mujoco.mj_name2id(
-        model, mujoco.mjtObj.mjOBJ_CAMERA, "lidar_right_camera"
+    # Camera naming can differ per profile bundle. If bundle.json exists, use it.
+    bundle_cfg = load_bundle_json(profile) if profile else None
+    rgb_cam_name = (
+        str(bundle_cfg.get("rgb_camera"))  # type: ignore[union-attr]
+        if bundle_cfg and "rgb_camera" in bundle_cfg
+        else "head_camera"
+    )
+    lidar_front_name = (
+        str(bundle_cfg.get("lidar_front_camera"))  # type: ignore[union-attr]
+        if bundle_cfg and "lidar_front_camera" in bundle_cfg
+        else "lidar_front_camera"
+    )
+    lidar_left_name = (
+        str(bundle_cfg.get("lidar_left_camera"))  # type: ignore[union-attr]
+        if bundle_cfg and "lidar_left_camera" in bundle_cfg
+        else "lidar_left_camera"
+    )
+    lidar_right_name = (
+        str(bundle_cfg.get("lidar_right_camera"))  # type: ignore[union-attr]
+        if bundle_cfg and "lidar_right_camera" in bundle_cfg
+        else "lidar_right_camera"
     )
 
+    camera_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, rgb_cam_name)
+    lidar_camera_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, lidar_front_name)
+    lidar_left_camera_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, lidar_left_name)
+    lidar_right_camera_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, lidar_right_name)
+
     shm.signal_ready()
+
+    # Lightweight profiler: log rolling averages of time spent in the MuJoCo subprocess.
+    # Includes physics stepping, rendering, pointcloud conversion, SHM writes, and policy inference.
+    profiler_enabled = bool(getattr(config, "mujoco_profiler", False))
+    profiler_interval_s = float(getattr(config, "mujoco_profiler_interval_s", 2.0))
+    if profiler_enabled:
+        from dimos.simulation.mujoco import policy as mujoco_policy
+
+        mujoco_policy.set_mujoco_profiler_enabled(True)
+        logger.info(
+            "MuJoCo profiler enabled",
+            interval_s=profiler_interval_s,
+            video_fps=VIDEO_FPS,
+            lidar_fps=LIDAR_FPS,
+            steps_per_frame=config.mujoco_steps_per_frame,
+        )
 
     with viewer.launch_passive(model, data, show_left_ui=False, show_right_ui=False) as m_viewer:
         camera_size = (VIDEO_WIDTH, VIDEO_HEIGHT)
@@ -134,34 +230,60 @@ def _run_simulation(config: GlobalConfig, shm: ShmReader) -> None:
         m_viewer.cam.azimuth = config.mujoco_camera_position_float[4]
         m_viewer.cam.elevation = config.mujoco_camera_position_float[5]
 
+        # Profiler accumulators (seconds).
+        acc_frames = 0
+        acc_step_s = 0.0
+        acc_sync_s = 0.0
+        acc_odom_s = 0.0
+        acc_rgb_render_s = 0.0
+        acc_rgb_shm_s = 0.0
+        acc_depth_render_s = 0.0
+        acc_depth_shm_s = 0.0
+        acc_pcd_s = 0.0
+        acc_lidar_shm_s = 0.0
+        next_report_t = time.perf_counter() + profiler_interval_s
+
         while m_viewer.is_running() and not shm.should_stop():
             step_start = time.time()
+            time.perf_counter()
 
             # Step simulation
+            t0 = time.perf_counter()
             for _ in range(config.mujoco_steps_per_frame):
                 mujoco.mj_step(model, data)
+                # In SDK2 mode, publish state after each physics step
+                if sdk2_bridge is not None:
+                    sdk2_bridge.publish_state()
+            acc_step_s += time.perf_counter() - t0
 
-            person_position_controller.tick(data)
-
+            t0 = time.perf_counter()
             m_viewer.sync()
+            acc_sync_s += time.perf_counter() - t0
 
             # Always update odometry
+            t0 = time.perf_counter()
             pos = data.qpos[0:3].copy()
             quat = data.qpos[3:7].copy()  # (w, x, y, z)
             shm.write_odom(pos, quat, time.time())
+            acc_odom_s += time.perf_counter() - t0
 
             current_time = time.time()
 
             # Video rendering
             if current_time - last_video_time >= video_interval:
+                t0 = time.perf_counter()
                 rgb_renderer.update_scene(data, camera=camera_id, scene_option=scene_option)
                 pixels = rgb_renderer.render()
+                acc_rgb_render_s += time.perf_counter() - t0
+                t0 = time.perf_counter()
                 shm.write_video(pixels)
+                acc_rgb_shm_s += time.perf_counter() - t0
                 last_video_time = current_time
 
             # Lidar/depth rendering
             if current_time - last_lidar_time >= lidar_interval:
                 # Render all depth cameras
+                t0 = time.perf_counter()
                 depth_renderer.update_scene(data, camera=lidar_camera_id, scene_option=scene_option)
                 depth_front = depth_renderer.render()
 
@@ -174,10 +296,14 @@ def _run_simulation(config: GlobalConfig, shm: ShmReader) -> None:
                     data, camera=lidar_right_camera_id, scene_option=scene_option
                 )
                 depth_right = depth_right_renderer.render()
+                acc_depth_render_s += time.perf_counter() - t0
 
+                t0 = time.perf_counter()
                 shm.write_depth(depth_front, depth_left, depth_right)
+                acc_depth_shm_s += time.perf_counter() - t0
 
                 # Process depth images into lidar message
+                t0 = time.perf_counter()
                 all_points = []
                 cameras_data = [
                     (
@@ -210,12 +336,18 @@ def _run_simulation(config: GlobalConfig, shm: ShmReader) -> None:
                     pcd.points = o3d.utility.Vector3dVector(combined_points)
                     pcd = pcd.voxel_down_sample(voxel_size=LIDAR_RESOLUTION)
 
-                    lidar_msg = PointCloud2(
+                    lidar_msg = LidarMessage(
                         pointcloud=pcd,
                         ts=time.time(),
-                        frame_id="world",
+                        origin=Vector3(pos[0], pos[1], pos[2]),
+                        resolution=LIDAR_RESOLUTION,
                     )
+                    acc_pcd_s += time.perf_counter() - t0
+                    t0 = time.perf_counter()
                     shm.write_lidar(lidar_msg)
+                    acc_lidar_shm_s += time.perf_counter() - t0
+                else:
+                    acc_pcd_s += time.perf_counter() - t0
 
                 last_lidar_time = current_time
 
@@ -224,7 +356,50 @@ def _run_simulation(config: GlobalConfig, shm: ShmReader) -> None:
             if time_until_next_step > 0:
                 time.sleep(time_until_next_step)
 
-        person_position_controller.stop()
+            if profiler_enabled:
+                acc_frames += 1
+                now = time.perf_counter()
+                if now >= next_report_t:
+                    from dimos.simulation.mujoco import policy as mujoco_policy
+
+                    pol = mujoco_policy.get_mujoco_profiler_and_reset()
+                    calls = int(pol.get("control_calls", 0))
+                    ctrl_ms = (float(pol.get("control_total_s", 0.0)) * 1000.0) / max(calls, 1)
+                    obs_ms = (float(pol.get("obs_total_s", 0.0)) * 1000.0) / max(calls, 1)
+                    onnx_ms = (float(pol.get("onnx_total_s", 0.0)) * 1000.0) / max(calls, 1)
+
+                    def per_frame_ms(total_s: float) -> float:
+                        return (total_s * 1000.0) / max(acc_frames, 1)
+
+                    logger.info(
+                        "MuJoCo perf (avg ms/frame)",
+                        frames=acc_frames,
+                        physics_ms=per_frame_ms(acc_step_s),
+                        viewer_sync_ms=per_frame_ms(acc_sync_s),
+                        odom_ms=per_frame_ms(acc_odom_s),
+                        rgb_render_ms=per_frame_ms(acc_rgb_render_s),
+                        rgb_shm_ms=per_frame_ms(acc_rgb_shm_s),
+                        depth_render_ms=per_frame_ms(acc_depth_render_s),
+                        depth_shm_ms=per_frame_ms(acc_depth_shm_s),
+                        pcd_ms=per_frame_ms(acc_pcd_s),
+                        lidar_shm_ms=per_frame_ms(acc_lidar_shm_s),
+                        ctrl_calls=calls,
+                        ctrl_total_ms_per_call=ctrl_ms,
+                        ctrl_obs_ms_per_call=obs_ms,
+                        ctrl_onnx_ms_per_call=onnx_ms,
+                    )
+
+                    acc_frames = 0
+                    acc_step_s = 0.0
+                    acc_sync_s = 0.0
+                    acc_odom_s = 0.0
+                    acc_rgb_render_s = 0.0
+                    acc_rgb_shm_s = 0.0
+                    acc_depth_render_s = 0.0
+                    acc_depth_shm_s = 0.0
+                    acc_pcd_s = 0.0
+                    acc_lidar_shm_s = 0.0
+                    next_report_t = now + profiler_interval_s
 
 
 if __name__ == "__main__":

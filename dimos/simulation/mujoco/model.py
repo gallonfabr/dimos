@@ -15,6 +15,7 @@
 # limitations under the License.
 
 
+import json
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -27,7 +28,12 @@ from dimos.core.global_config import GlobalConfig
 from dimos.mapping.occupancy.extrude_occupancy import generate_mujoco_scene
 from dimos.msgs.nav_msgs.OccupancyGrid import OccupancyGrid
 from dimos.simulation.mujoco.input_controller import InputController
-from dimos.simulation.mujoco.policy import G1OnnxController, Go1OnnxController, OnnxController
+from dimos.simulation.mujoco.policy import (
+    G1OnnxController,
+    Go1OnnxController,
+    MjlabVelocityOnnxController,
+    OnnxController,
+)
 from dimos.utils.data import get_data
 
 
@@ -35,33 +41,79 @@ def _get_data_dir() -> epath.Path:
     return epath.Path(str(get_data("mujoco_sim")))
 
 
-def get_assets() -> dict[str, bytes]:
-    data_dir = _get_data_dir()
-    assets: dict[str, bytes] = {}
+def _bundle_dir(profile: str) -> epath.Path:
+    return _get_data_dir() / profile
 
+
+def _bundle_model_path(profile: str) -> epath.Path:
+    # New bundle layout: data/mujoco_sim/<profile>/model.xml
+    return _bundle_dir(profile) / "model.xml"
+
+
+def _bundle_policy_path(profile: str) -> epath.Path:
+    # New bundle layout: data/mujoco_sim/<profile>/policy.onnx
+    return _bundle_dir(profile) / "policy.onnx"
+
+
+def _legacy_profile_xml_path(profile: str) -> epath.Path:
+    # Legacy layout (older integration): data/mujoco_sim/<profile>.xml
+    return _get_data_dir() / f"{profile}.xml"
+
+
+def _legacy_profile_policy_path(profile: str) -> epath.Path:
+    # Legacy layout (older integration): data/mujoco_sim/<profile>_policy.onnx
+    return _get_data_dir() / f"{profile}_policy.onnx"
+
+
+def load_bundle_json(profile: str) -> dict[str, object] | None:
+    """Load optional bundle.json for a MuJoCo profile.
+
+    The MuJoCo subprocess uses this to resolve profile-specific camera names.
+    """
+    cfg_path = _bundle_dir(profile) / "bundle.json"
+    if not cfg_path.exists():
+        return None
+    with cfg_path.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def get_assets(*, profile: str | None = None) -> dict[str, bytes]:
+    data_dir = _get_data_dir()
     # Assets used from https://sketchfab.com/3d-models/mersus-office-8714be387bcd406898b2615f7dae3a47
     # Created by Ryan Cassidy and Coleman Costello
+    assets: dict[str, bytes] = {}
+
+    # Add all top-level XMLs. Keys must match include paths like "unitree_go1.xml".
     mjx_env.update_assets(assets, data_dir, "*.xml")
-    mjx_env.update_assets(assets, data_dir / "scene_office1/textures", "*.png")
-    mjx_env.update_assets(assets, data_dir / "scene_office1/office_split", "*.obj")
-    mjx_env.update_assets(assets, mjx_env.MENAGERIE_PATH / "unitree_go1" / "assets")
-    mjx_env.update_assets(assets, mjx_env.MENAGERIE_PATH / "unitree_g1" / "assets")
 
-    # From: https://sketchfab.com/3d-models/jeong-seun-34-42956ca979404a038b8e0d3e496160fd
-    person_dir = epath.Path(str(get_data("person")))
-    mjx_env.update_assets(assets, person_dir, "*.obj")
-    mjx_env.update_assets(assets, person_dir, "*.png")
+    # Scene assets are referenced with explicit paths (e.g. "scene_office1/office_split/*.obj")
+    # after we rewrite the scene XML in get_model_xml(). Load them with path-prefixed keys.
+    fs_root = Path(str(data_dir))
+    for p in (fs_root / "scene_office1/textures").glob("*.png"):
+        assets[f"scene_office1/textures/{p.name}"] = p.read_bytes()
+    for p in (fs_root / "scene_office1/office_split").glob("*.obj"):
+        assets[f"scene_office1/office_split/{p.name}"] = p.read_bytes()
 
+    if profile:
+        # Bundle-scoped assets: keep the sim fully self-contained when a profile is used.
+        # Include model.xml and anything under assets/ (meshes/textures).
+        for p in (fs_root / profile).rglob("*"):
+            if p.is_file():
+                assets[p.relative_to(fs_root).as_posix()] = p.read_bytes()
+    else:
+        mjx_env.update_assets(assets, mjx_env.MENAGERIE_PATH / "unitree_go1" / "assets")
+        mjx_env.update_assets(assets, mjx_env.MENAGERIE_PATH / "unitree_g1" / "assets")
     return assets
 
 
 def load_model(
-    input_device: InputController, robot: str, scene_xml: str
+    input_device: InputController, robot: str, scene_xml: str, *, profile: str | None = None
 ) -> tuple[mujoco.MjModel, mujoco.MjData]:
     mujoco.set_mjcb_control(None)
 
-    xml_string = get_model_xml(robot, scene_xml)
-    model = mujoco.MjModel.from_xml_string(xml_string, assets=get_assets())
+    include_name = profile or robot
+    xml_string = get_model_xml(robot=robot, scene_xml=scene_xml, profile=profile)
+    model = mujoco.MjModel.from_xml_string(xml_string, assets=get_assets(profile=profile))
     data = mujoco.MjData(model)
 
     mujoco.mj_resetDataKeyframe(model, data, 0)
@@ -76,9 +128,21 @@ def load_model(
     n_substeps = round(ctrl_dt / sim_dt)
     model.opt.timestep = sim_dt
 
+    # Resolve policy path. Prefer new bundle layout; fall back to legacy flat files.
+    if profile and _bundle_policy_path(profile).exists():
+        policy_path = _bundle_policy_path(profile).as_posix()
+    else:
+        policy_path = (_legacy_profile_policy_path(include_name)).as_posix()
+
+    # Default joint angles used for legacy controllers and as a shape reference.
+    # Some MJLab-exported bundles use "init_state" and may not provide "home".
+    if model.nkey > 0:
+        default_qpos = np.array(model.key_qpos[0, 7:], dtype=np.float32)
+    else:
+        default_qpos = np.array(data.qpos[7:], dtype=np.float32)
     params = {
-        "policy_path": (_get_data_dir() / f"{robot}_policy.onnx").as_posix(),
-        "default_angles": np.array(model.keyframe("home").qpos[7:]),
+        "policy_path": policy_path,
+        "default_angles": default_qpos,
         "n_substeps": n_substeps,
         "action_scale": 0.5,
         "input_controller": input_device,
@@ -89,7 +153,11 @@ def load_model(
         case "unitree_go1":
             policy: OnnxController = Go1OnnxController(**params)
         case "unitree_g1":
-            policy = G1OnnxController(**params, drift_compensation=[-0.18, 0.0, -0.09])
+            # Select controller by profile/bundle name when provided.
+            if include_name == "unitree_g1_mjlab":
+                policy = MjlabVelocityOnnxController(**params)
+            else:
+                policy = G1OnnxController(**params, drift_compensation=[-0.18, 0.0, -0.09])
         case _:
             raise ValueError(f"Unknown robot policy: {robot}")
 
@@ -98,10 +166,42 @@ def load_model(
     return model, data
 
 
-def get_model_xml(robot: str, scene_xml: str) -> str:
+def get_model_xml(*, robot: str, scene_xml: str, profile: str | None = None) -> str:
     root = ET.fromstring(scene_xml)
-    root.set("model", f"{robot}_scene")
-    root.insert(0, ET.Element("include", file=f"{robot}.xml"))
+    root.set("model", f"{(profile or robot)}_scene")
+
+    # The office scene config uses a global compiler meshdir/texturedir.
+    # When we include a robot MJCF (e.g. Unitree GO1) that references meshes like "trunk.stl"
+    # without a directory prefix, MuJoCo incorrectly resolves them relative to the scene meshdir
+    # and fails to load. Fix by rewriting scene asset file paths to be explicit and clearing
+    # meshdir/texturedir so they can't leak into the included robot model.
+    compiler = root.find("compiler")
+    if compiler is not None:
+        meshdir = compiler.get("meshdir")
+        texturedir = compiler.get("texturedir")
+
+        if meshdir:
+            for mesh in root.findall("./asset/mesh"):
+                f = mesh.get("file")
+                if f and "/" not in f and "\\" not in f:
+                    mesh.set("file", f"{meshdir}/{f}")
+            compiler.attrib.pop("meshdir", None)
+
+        if texturedir:
+            for tex in root.findall("./asset/texture"):
+                f = tex.get("file")
+                if f and "/" not in f and "\\" not in f:
+                    tex.set("file", f"{texturedir}/{f}")
+            compiler.attrib.pop("texturedir", None)
+
+    # Resolve robot include file path.
+    # Prefer new bundle layout: <profile>/model.xml
+    if profile and _bundle_model_path(profile).exists():
+        include_file = f"{profile}/model.xml"
+    else:
+        # Legacy behavior: include <name>.xml from data/mujoco_sim root.
+        include_file = f"{profile or robot}.xml"
+    root.insert(0, ET.Element("include", file=include_file))
 
     # Ensure visual/map element exists with znear and zfar
     visual = root.find("visual")
@@ -113,36 +213,48 @@ def get_model_xml(robot: str, scene_xml: str) -> str:
     map_elem.set("znear", "0.01")
     map_elem.set("zfar", "10000")
 
-    _add_person_object(root)
-
     return ET.tostring(root, encoding="unicode")
 
 
-def _add_person_object(root: ET.Element) -> None:
-    asset = root.find("asset")
+def load_model_sdk2(
+    robot: str, scene_xml: str, *, profile: str | None = None
+) -> tuple[mujoco.MjModel, mujoco.MjData]:
+    """Load MuJoCo model without ONNX policy for SDK2 bridge mode.
 
-    if asset is None:
-        asset = ET.SubElement(root, "asset")
+    In SDK2 mode, motor control is handled by the SDK2BridgeController
+    which receives commands via DDS and applies PD control directly.
+    No policy callback is registered - mj_step uses data.ctrl directly.
 
-    ET.SubElement(asset, "mesh", name="person_mesh", file="jeong_seun_34.obj")
-    ET.SubElement(asset, "texture", name="person_texture", file="material_0.png", type="2d")
-    ET.SubElement(asset, "material", name="person_material", texture="person_texture")
+    Args:
+        robot: Robot name (e.g., "unitree_go2", "unitree_g1")
+        scene_xml: Scene XML string
+        profile: Optional MuJoCo profile bundle name
 
-    worldbody = root.find("worldbody")
+    Returns:
+        Tuple of (MjModel, MjData)
+    """
+    mujoco.set_mjcb_control(None)  # Clear any existing callback
 
-    if worldbody is None:
-        worldbody = ET.SubElement(root, "worldbody")
+    xml_string = get_model_xml(robot=robot, scene_xml=scene_xml, profile=profile)
+    model = mujoco.MjModel.from_xml_string(xml_string, assets=get_assets(profile=profile))
+    data = mujoco.MjData(model)
 
-    person_body = ET.SubElement(worldbody, "body", name="person", pos="0 0 0", mocap="true")
+    # Apply keyframe if available
+    if model.nkey > 0:
+        mujoco.mj_resetDataKeyframe(model, data, 0)
+        print(f"[load_model_sdk2] Applied keyframe 0, qpos[7:13] = {data.qpos[7:13].tolist()}")
+    else:
+        print(f"[load_model_sdk2] WARNING: No keyframes in model (nkey={model.nkey})")
 
-    ET.SubElement(
-        person_body,
-        "geom",
-        type="mesh",
-        mesh="person_mesh",
-        material="person_material",
-        euler="1.5708 0 0",
-    )
+    # Set timestep based on robot type (matching load_model behavior)
+    match robot:
+        case "unitree_g1":
+            sim_dt = 0.002
+        case _:
+            sim_dt = 0.005
+    model.opt.timestep = sim_dt
+
+    return model, data
 
 
 def load_scene_xml(config: GlobalConfig) -> str:
