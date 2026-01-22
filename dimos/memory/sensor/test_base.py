@@ -13,6 +13,7 @@
 # limitations under the License.
 """Tests for SensorStore implementations."""
 
+from dataclasses import dataclass
 from pathlib import Path
 import tempfile
 import uuid
@@ -22,6 +23,23 @@ import pytest
 from dimos.memory.sensor.base import InMemoryStore, SensorStore
 from dimos.memory.sensor.pickledir import PickleDirStore
 from dimos.memory.sensor.sqlite import SqliteStore
+from dimos.types.timestamped import Timestamped
+
+
+@dataclass
+class SampleData(Timestamped):
+    """Simple timestamped data for testing."""
+
+    value: str
+
+    def __init__(self, value: str, ts: float) -> None:
+        super().__init__(ts)
+        self.value = value
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, SampleData):
+            return self.value == other.value and self.ts == other.ts
+        return False
 
 
 @pytest.fixture
@@ -31,16 +49,16 @@ def temp_dir():
         yield tmpdir
 
 
-def make_in_memory_store() -> SensorStore[str]:
-    return InMemoryStore[str]()
+def make_in_memory_store() -> SensorStore[SampleData]:
+    return InMemoryStore[SampleData]()
 
 
-def make_pickle_dir_store(tmpdir: str) -> SensorStore[str]:
-    return PickleDirStore[str](tmpdir)
+def make_pickle_dir_store(tmpdir: str) -> SensorStore[SampleData]:
+    return PickleDirStore[SampleData](tmpdir)
 
 
-def make_sqlite_store(tmpdir: str) -> SensorStore[str]:
-    return SqliteStore[str](Path(tmpdir) / "test.db")
+def make_sqlite_store(tmpdir: str) -> SensorStore[SampleData]:
+    return SqliteStore[SampleData](Path(tmpdir) / "test.db")
 
 
 # Base test data (always available)
@@ -62,11 +80,11 @@ try:
     _test_conn = psycopg2.connect(dbname="dimensional")
     _test_conn.close()
 
-    def make_postgres_store(_tmpdir: str) -> SensorStore[str]:
+    def make_postgres_store(_tmpdir: str) -> SensorStore[SampleData]:
         """Create PostgresStore with unique table name."""
         table = f"test_{uuid.uuid4().hex[:8]}"
         _postgres_tables.append(table)
-        store = PostgresStore[str](table)
+        store = PostgresStore[SampleData](table)
         store.start()
         return store
 
@@ -98,18 +116,18 @@ class TestSensorStore:
 
     def test_save_and_load(self, store_factory, store_name, temp_dir):
         store = store_factory(temp_dir)
-        store.save("data_at_1", 1.0)
-        store.save("data_at_2", 2.0)
+        store.save(SampleData("data_at_1", 1.0))
+        store.save(SampleData("data_at_2", 2.0))
 
-        assert store.load(1.0) == "data_at_1"
-        assert store.load(2.0) == "data_at_2"
+        assert store.load(1.0) == SampleData("data_at_1", 1.0)
+        assert store.load(2.0) == SampleData("data_at_2", 2.0)
         assert store.load(3.0) is None
 
     def test_find_closest_timestamp(self, store_factory, store_name, temp_dir):
         store = store_factory(temp_dir)
-        store.save("a", 1.0)
-        store.save("b", 2.0)
-        store.save("c", 3.0)
+        store.save(SampleData("a", 1.0))
+        store.save(SampleData("b", 2.0))
+        store.save(SampleData("c", 3.0))
 
         # Exact match
         assert store._find_closest_timestamp(2.0) == 2.0
@@ -126,32 +144,40 @@ class TestSensorStore:
 
     def test_iter_items(self, store_factory, store_name, temp_dir):
         store = store_factory(temp_dir)
-        store.save("a", 1.0)
-        store.save("c", 3.0)
-        store.save("b", 2.0)
+        store.save(SampleData("a", 1.0))
+        store.save(SampleData("c", 3.0))
+        store.save(SampleData("b", 2.0))
 
         # Should iterate in timestamp order
         items = list(store._iter_items())
-        assert items == [(1.0, "a"), (2.0, "b"), (3.0, "c")]
+        assert items == [
+            (1.0, SampleData("a", 1.0)),
+            (2.0, SampleData("b", 2.0)),
+            (3.0, SampleData("c", 3.0)),
+        ]
 
     def test_iter_items_with_range(self, store_factory, store_name, temp_dir):
         store = store_factory(temp_dir)
-        store.save("a", 1.0)
-        store.save("b", 2.0)
-        store.save("c", 3.0)
-        store.save("d", 4.0)
+        store.save(SampleData("a", 1.0))
+        store.save(SampleData("b", 2.0))
+        store.save(SampleData("c", 3.0))
+        store.save(SampleData("d", 4.0))
 
         # Start only
         items = list(store._iter_items(start=2.0))
-        assert items == [(2.0, "b"), (3.0, "c"), (4.0, "d")]
+        assert items == [
+            (2.0, SampleData("b", 2.0)),
+            (3.0, SampleData("c", 3.0)),
+            (4.0, SampleData("d", 4.0)),
+        ]
 
         # End only
         items = list(store._iter_items(end=3.0))
-        assert items == [(1.0, "a"), (2.0, "b")]
+        assert items == [(1.0, SampleData("a", 1.0)), (2.0, SampleData("b", 2.0))]
 
         # Both
         items = list(store._iter_items(start=2.0, end=4.0))
-        assert items == [(2.0, "b"), (3.0, "c")]
+        assert items == [(2.0, SampleData("b", 2.0)), (3.0, SampleData("c", 3.0))]
 
     def test_empty_store(self, store_factory, store_name, temp_dir):
         store = store_factory(temp_dir)

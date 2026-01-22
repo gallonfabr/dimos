@@ -25,7 +25,9 @@ from reactivex.disposable import CompositeDisposable, Disposable
 from reactivex.observable import Observable
 from reactivex.scheduler import TimeoutScheduler
 
-T = TypeVar("T")
+from dimos.types.timestamped import Timestamped
+
+T = TypeVar("T", bound=Timestamped)
 
 
 class SensorStore(Generic[T], ABC):
@@ -61,14 +63,9 @@ class SensorStore(Generic[T], ABC):
         """Find closest timestamp. Backend can optimize (binary search, db index, etc.)."""
         ...
 
-    def save(self, data: T, timestamp: float | None = None) -> None:
-        """Save data. Uses data.ts if available, otherwise timestamp arg, otherwise now."""
-        if timestamp is None:
-            if hasattr(data, "ts"):
-                timestamp = data.ts  # type: ignore[union-attr]
-            else:
-                timestamp = time.time()
-        self._save(timestamp, data)
+    def save(self, data: T) -> None:
+        """Save timestamped data using its .ts attribute."""
+        self._save(data.ts, data)
 
     def load(self, timestamp: float) -> T | None:
         """Load data at exact timestamp."""

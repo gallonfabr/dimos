@@ -57,14 +57,14 @@ class SqliteStore(SensorStore[T]):
         store = SqliteStore("recordings/sensors", table="lidar")
     """
 
-    def __init__(self, name: str, table: str = "sensor_data") -> None:
+    def __init__(self, name: str | Path, table: str = "sensor_data") -> None:
         """
         Args:
             name: Data name (e.g. "recordings/lidar") resolved via get_data,
                   absolute path, or ":memory:" for in-memory.
             table: Table name for this sensor's data (alphanumeric/underscore only).
         """
-        self._name = name
+        self._name = str(name)
         self._table = _validate_identifier(table)
         self._db_path: str | None = None
         self._conn: sqlite3.Connection | None = None
