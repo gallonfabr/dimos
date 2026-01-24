@@ -9,7 +9,7 @@ Transports connect **module streams** across **process boundaries** and/or **net
 
 Each edge in the graph is a **transported stream** (potentially different protocols). Each node is a **module**:
 
-![go2_basic](assets/go2_basic.svg)
+![go2_nav](assets/go2_nav.svg)
 
 ## What the transport layer guarantees (and what it doesn’t)
 
