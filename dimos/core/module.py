@@ -119,6 +119,18 @@ class ModuleBase(Configurable[ModuleConfigT], SkillContainer, Resource):
             return f"{self.config.frame_id_prefix}/{base}"
         return base
 
+    # called during record sessions
+    # sensor ingress modules are recording by default?
+    @rpc
+    def record(self) -> None:
+        for name, output in self.outputs.items():
+            output.observable().subscribe(lambda v, n=name: print(f"RECORD {n}: {v}"))
+
+    # called instead of start during replay sessions
+    @rpc
+    def replay(self) -> None:
+        raise NotImplementedError("replay() not implemented for this module")
+
     @rpc
     def start(self) -> None:
         pass

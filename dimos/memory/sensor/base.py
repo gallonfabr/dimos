@@ -37,8 +37,6 @@ class SensorStore(Generic[T], ABC):
     All iteration, streaming, and seek logic comes free from the base class.
     """
 
-    # === Abstract - implement for your backend ===
-
     @abstractmethod
     def _save(self, timestamp: float, data: T) -> None:
         """Save data at timestamp."""
