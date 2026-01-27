@@ -21,7 +21,7 @@ import inspect
 import operator
 import sys
 from types import MappingProxyType
-from typing import Any, Literal, Self, get_args, get_origin, get_type_hints
+from typing import Any, Literal, get_args, get_origin, get_type_hints
 
 import rerun as rr
 import rerun.blueprint as rrb
@@ -60,7 +60,9 @@ class _BlueprintAtom:
     kwargs: dict[str, Any]
 
     @classmethod
-    def create(cls, module: type[Module], args: tuple[Any, ...], kwargs: dict[str, Any]) -> Self:
+    def create(
+        cls, module: type[Module], args: tuple[Any, ...], kwargs: dict[str, Any]
+    ) -> "_BlueprintAtom":
         connections: list[StreamRef] = []
         module_refs: list[ModuleRef] = []
 
@@ -115,7 +117,7 @@ class Blueprint:
     requirement_checks: tuple[Callable[[], str | None], ...] = field(default_factory=tuple)
 
     @classmethod
-    def create(cls, module: type[Module], *args: Any, **kwargs: Any) -> Self:
+    def create(cls, module: type[Module], *args: Any, **kwargs: Any) -> "Blueprint":
         blueprint = _BlueprintAtom.create(module, args, kwargs)
         return cls(blueprints=(blueprint,))
 
