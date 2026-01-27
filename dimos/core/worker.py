@@ -57,12 +57,10 @@ class Actor:
         return ActorFuture(result)
 
     def __getattr__(self, name: str) -> ActorFuture:
-        """Proxy attribute access to the worker process."""
+        # Raise AttributeError for private attributes to preserve pickle compatibility.
         if name.startswith("_"):
             raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
-
-        result = self._send_request_to_worker({"type": "getattr", "name": name})
-        return ActorFuture(result)
+        raise NotImplementedError("Should not be needed anymore.")
 
 
 # Global forkserver context. Using `forkserver` instead of `fork` because it
@@ -159,7 +157,6 @@ def _worker_entrypoint(
     worker_id: int,
 ) -> None:
     instance = None
-
     try:
         instance = module_class(*args, **kwargs)
         instance.worker = worker_id
@@ -181,7 +178,7 @@ def _worker_loop(conn: Connection, instance: Any, worker_id: int) -> None:
             if not conn.poll(timeout=0.1):
                 continue
             request = conn.recv()
-        except EOFError:
+        except (EOFError, KeyboardInterrupt):
             break
 
         response: dict[str, Any] = {}
@@ -191,9 +188,6 @@ def _worker_loop(conn: Connection, instance: Any, worker_id: int) -> None:
             if req_type == "set_ref":
                 instance.ref = request.get("ref")
                 response["result"] = worker_id
-
-            elif req_type == "getattr":
-                response["result"] = getattr(instance, request["name"])
 
             elif req_type == "shutdown":
                 response["result"] = True
