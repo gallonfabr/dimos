@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -45,6 +46,13 @@ _MODE_VELOCITY = 1
 _MODE_EFFORT = 2
 
 
+def _env_truthy(name: str) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
 class MujocoEngine(SimulationEngine):
     """
     MuJoCo simulation engine.
@@ -69,7 +77,10 @@ class MujocoEngine(SimulationEngine):
         self._control_frequency = 1.0 / timestep if timestep > 0.0 else 100.0
 
         self._connected = False
-        self._use_subprocess = sys.platform == "darwin" and not headless
+        force_subprocess = _env_truthy("DIMOS_MUJOCO_FORCE_SUBPROCESS")
+        self._use_subprocess = (sys.platform == "darwin" or force_subprocess) and (
+            not headless or force_subprocess
+        )
         self._process: subprocess.Popen[bytes] | None = None
         self._shm: ShmWriter | None = None
         self._lock = threading.Lock()
@@ -159,8 +170,11 @@ class MujocoEngine(SimulationEngine):
                     return True
 
                 self._shm = ShmWriter(self._num_joints)
-                mjpython = Path(sys.executable).with_name("mjpython")
-                executable = str(mjpython) if mjpython.exists() else "mjpython"
+                if sys.platform == "darwin":
+                    mjpython = Path(sys.executable).with_name("mjpython")
+                    executable = str(mjpython) if mjpython.exists() else "mjpython"
+                else:
+                    executable = sys.executable
                 args = [
                     executable,
                     str(LAUNCHER_PATH),

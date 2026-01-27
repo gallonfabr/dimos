@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import sys
 
 from dimos.agents.cli.human import human_input
@@ -26,11 +27,26 @@ from dimos.msgs.trajectory_msgs import JointTrajectory
 from dimos.simulation.manipulators.sim_module import simulation
 from dimos.utils.data import get_data
 
+
+def _parse_headless_env(default: bool) -> bool:
+    raw = os.getenv("DIMOS_HEADLESS")
+    if raw is None:
+        return default
+    normalized = raw.strip().lower()
+    if normalized in {"1", "true", "yes", "y", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "n", "off"}:
+        return False
+    return default
+
+
+_headless = _parse_headless_env(sys.platform != "darwin")
+
 xarm7_trajectory_sim = simulation(
     engine="mujoco",
     config_path=lambda: get_data("xarm7")
     / "scene.xml",  # avoid triggering LFS downloads during tests
-    headless=False,
+    headless=_headless,
 ).transports(
     {
         ("joint_state", JointState): LCMTransport("/xarm/joint_states", JointState),
