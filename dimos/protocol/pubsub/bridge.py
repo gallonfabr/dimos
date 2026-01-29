@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, Protocol, TypeVar
 
-from dimos.protocol.service.spec import Configurable, Service
+from dimos.protocol.service.spec import Service
 
 if TYPE_CHECKING:
     from collections.abc import Callable

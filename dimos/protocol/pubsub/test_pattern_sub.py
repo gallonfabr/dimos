@@ -214,7 +214,7 @@ def test_subscribe_glob(tc: Case[Any, Any]) -> None:
         received: list[tuple[Any, Any]] = []
 
         with tc.pubsub_context() as (pub, sub):
-            sub.subscribe(pattern_topic, lambda msg, topic: received.append((msg, topic)))
+            sub.subscribe(pattern_topic, lambda msg, topic, r=received: r.append((msg, topic)))
             time.sleep(0.01)  # Allow subscription to be ready
 
             for topic, value in tc.topic_values:
@@ -241,7 +241,7 @@ def test_subscribe_regex(tc: Case[Any, Any]) -> None:
         received: list[tuple[Any, Any]] = []
 
         with tc.pubsub_context() as (pub, sub):
-            sub.subscribe(pattern_topic, lambda msg, topic: received.append((msg, topic)))
+            sub.subscribe(pattern_topic, lambda msg, topic, r=received: r.append((msg, topic)))
 
             time.sleep(0.01)
 

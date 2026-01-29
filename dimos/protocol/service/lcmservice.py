@@ -20,12 +20,8 @@ import os
 import platform
 import threading
 import traceback
-from typing import TYPE_CHECKING
 
 import lcm
-
-if TYPE_CHECKING:
-    from dimos.msgs import DimosMsg
 
 from dimos.protocol.service.spec import Service
 from dimos.protocol.service.system_configurator import (
