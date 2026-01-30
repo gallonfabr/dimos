@@ -60,7 +60,7 @@ class ModuleCoordinator(Resource):  # type: ignore[misc]
         if not self._client:
             raise ValueError("Trying to dimos.deploy before dask client has started")
 
-        module: ModuleProxy = self._client.deploy(module_class, *args, **kwargs)  # type: ignore[attr-defined]
+        module: ModuleProxy = self._client.deploy(module_class, *args, **kwargs)  # type: ignore[union-attr, attr-defined, assignment]
         self._deployed_modules[module_class] = module
         return module
 
@@ -73,7 +73,7 @@ class ModuleCoordinator(Resource):  # type: ignore[misc]
         if isinstance(self._client, WorkerManager):
             modules = self._client.deploy_parallel(module_specs)
             for (module_class, _, _), module in zip(module_specs, modules, strict=True):
-                self._deployed_modules[module_class] = module
+                self._deployed_modules[module_class] = module  # type: ignore[assignment]
             return modules  # type: ignore[return-value]
         else:
             return [
