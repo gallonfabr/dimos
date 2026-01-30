@@ -311,7 +311,7 @@ class Blueprint:
                 )
 
                 # if the spec is actually module, use that (basically a user override)
-                if inspect.isclass(spec, type) and issubclass(spec, Module):
+                if inspect.isclass(spec) and issubclass(spec, Module):
                     mod_and_mod_ref_to_proxy[blueprint.module, each_module_ref.name] = spec
                     continue
 
