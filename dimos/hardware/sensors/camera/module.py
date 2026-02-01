@@ -15,7 +15,10 @@
 from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from rerun._baseclasses import Archetype
 
 import reactivex as rx
 from reactivex import operators as ops
@@ -105,7 +108,10 @@ class CameraModule(Module[CameraModuleConfig], perception.Camera):
         self.camera_info.publish(camera_info)
 
         if self._rerun_enabled:
-            rr.log("world/robot/camera", camera_info.to_rerun())
+            rr.log(
+                "world/robot/camera",
+                cast("Archetype", camera_info.to_rerun(image_topic=None, optical_transform=None)),
+            )
 
         if not self.config.transform:
             return

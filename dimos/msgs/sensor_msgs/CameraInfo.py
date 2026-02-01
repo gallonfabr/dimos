@@ -15,6 +15,10 @@
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from dimos.visualization.rerun.bridge import RerunData, RerunMulti
 
 # Import LCM types
 from dimos_lcm.sensor_msgs import CameraInfo as LCMCameraInfo
@@ -401,7 +405,7 @@ class CameraInfo(Timestamped):
         # These are defaults for a typical RGB camera with a known transform
         image_topic: str | None = "color_image",
         optical_transform: str | None = "camera_optical",
-    ):
+    ) -> RerunData:
         """Convert to Rerun Pinhole archetype for camera frustum visualization.
 
         Args:
@@ -430,7 +434,7 @@ class CameraInfo(Timestamped):
         if not image_topic:
             return pinhole
 
-        ret = []
+        ret: RerunMulti = []
 
         # Add pinhole under world/image_topic (we know which Image this CameraInfo refers to)
         ret.append(

@@ -46,6 +46,8 @@ from typing import TYPE_CHECKING, Any
 from dimos.types.timestamped import Timestamped
 
 if TYPE_CHECKING:
+    from rerun._baseclasses import Archetype
+
     from dimos.msgs.sensor_msgs.CameraInfo import CameraInfo
     from dimos.msgs.sensor_msgs.Image import Image
 
@@ -618,7 +620,7 @@ class PointCloud2(Timestamped):
             return 0
         return int(self._pcd_tensor.point["positions"].shape[0])
 
-    def to_rerun(  # type: ignore[no-untyped-def]
+    def to_rerun(
         self,
         radii: float = 0.025,
         colormap: str | None = "turbo",
@@ -626,8 +628,8 @@ class PointCloud2(Timestamped):
         mode: str = "boxes",
         size: float | None = None,
         fill_mode: str = "solid",
-        **kwargs,  # type: ignore[no-untyped-def]
-    ):  # type: ignore[no-untyped-def]
+        **kwargs: object,
+    ) -> Archetype:
         import rerun as rr
 
         """Convert to Rerun Points3D or Boxes3D archetype.

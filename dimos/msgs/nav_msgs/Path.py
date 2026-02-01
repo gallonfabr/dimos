@@ -38,6 +38,8 @@ from dimos.types.timestamped import Timestamped
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+    from rerun._baseclasses import Archetype
+
 
 def sec_nsec(ts):  # type: ignore[no-untyped-def]
     s = int(ts)
@@ -233,12 +235,12 @@ class Path(Timestamped):
 
         return ros_msg
 
-    def to_rerun(  # type: ignore[no-untyped-def]
+    def to_rerun(
         self,
         color: tuple[int, int, int] = (0, 255, 128),
         z_offset: float = 0.5,
         radii: float = 0.05,
-    ):
+    ) -> Archetype:
         """Convert to rerun LineStrips3D format.
 
         Args:

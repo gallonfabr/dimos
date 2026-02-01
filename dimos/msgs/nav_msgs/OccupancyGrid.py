@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from numpy.typing import NDArray
+    from rerun._baseclasses import Archetype
 
 
 class CostValues(IntEnum):
@@ -427,7 +428,7 @@ class OccupancyGrid(Timestamped):
 
         return int(self.grid[y, x])
 
-    def to_rerun(  # type: ignore[no-untyped-def]
+    def to_rerun(
         self,
         colormap: str | None = None,
         mode: str = "mesh",
@@ -436,7 +437,7 @@ class OccupancyGrid(Timestamped):
         cost_range: tuple[int, int] | None = None,
         background: str | None = None,
         **kwargs: Any,
-    ):  # type: ignore[no-untyped-def]
+    ) -> Archetype:
         """Convert to Rerun visualization format.
 
         Args:
@@ -572,12 +573,12 @@ class OccupancyGrid(Timestamped):
 
         return vis
 
-    def _to_rerun_image(  # type: ignore[no-untyped-def]
+    def _to_rerun_image(
         self,
         colormap: str | None = None,
         opacity: float = 1.0,
         cost_range: tuple[int, int] | None = None,
-    ):
+    ) -> Archetype:
         """Convert to 2D image visualization."""
         # Use existing cached visualization functions for supported palettes
         if colormap in ("turbo", "rainbow"):
@@ -626,14 +627,14 @@ class OccupancyGrid(Timestamped):
         # Flip vertically to match world coordinates (y=0 at bottom)
         return rr.Image(np.flipud(vis_gray), color_model="L")
 
-    def _to_rerun_mesh(  # type: ignore[no-untyped-def]
+    def _to_rerun_mesh(
         self,
         colormap: str | None = None,
         z_offset: float = 0.01,
         opacity: float = 1.0,
         cost_range: tuple[int, int] | None = None,
         background: str | None = None,
-    ):
+    ) -> Archetype:
         """Convert to 3D textured mesh overlay on floor plane.
 
         Uses a single quad with the occupancy grid as a texture.

@@ -468,6 +468,9 @@ class Blueprint:
 
         # Always include latency panel if we have any panels
         if side_panels:
+            import rerun as rr
+            import rerun.blueprint as rrb
+
             side_panels.append(
                 rrb.TimeSeriesView(
                     name="Latency (ms)",

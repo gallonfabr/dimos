@@ -16,7 +16,10 @@ from __future__ import annotations
 
 import math
 import time
-from typing import BinaryIO, TypeAlias
+from typing import TYPE_CHECKING, BinaryIO, TypeAlias
+
+if TYPE_CHECKING:
+    from rerun._baseclasses import Archetype
 
 from dimos_lcm.geometry_msgs import PoseStamped as LCMPoseStamped
 
@@ -87,7 +90,7 @@ class PoseStamped(Pose, Timestamped):
             f"euler=[{math.degrees(self.roll):.1f}, {math.degrees(self.pitch):.1f}, {math.degrees(self.yaw):.1f}])"
         )
 
-    def to_rerun(self):  # type: ignore[no-untyped-def]
+    def to_rerun(self) -> Archetype:
         """Convert to rerun Transform3D format.
 
         Returns a Transform3D that can be logged to Rerun to position
