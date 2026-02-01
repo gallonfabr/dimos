@@ -27,7 +27,6 @@ from dimos_lcm.std_msgs import Time as LCMTime  # type: ignore[import-untyped]
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
-import rerun as rr
 
 from dimos.msgs.geometry_msgs import Pose, Vector3, VectorLike
 from dimos.types.timestamped import Timestamped
@@ -460,6 +459,8 @@ class OccupancyGrid(Timestamped):
         - Unknown space (value -1): gray/transparent
         - Occupied space (value > 0): black/red with gradient
         """
+        import rerun as rr
+
         if self.grid.size == 0:
             if mode == "mesh":
                 return rr.Mesh3D(vertex_positions=[])
@@ -580,6 +581,8 @@ class OccupancyGrid(Timestamped):
         cost_range: tuple[int, int] | None = None,
     ) -> Archetype:
         """Convert to 2D image visualization."""
+        import rerun as rr
+
         # Use existing cached visualization functions for supported palettes
         if colormap in ("turbo", "rainbow"):
             from dimos.mapping.occupancy.visualizations import rainbow_image, turbo_image
@@ -640,6 +643,8 @@ class OccupancyGrid(Timestamped):
         Uses a single quad with the occupancy grid as a texture.
         Much more efficient than per-cell quads (4 vertices vs n_cells*4).
         """
+        import rerun as rr
+
         if self.grid.size == 0:
             return rr.Mesh3D(vertex_positions=[])
 

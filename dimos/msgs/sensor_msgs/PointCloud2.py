@@ -622,7 +622,7 @@ class PointCloud2(Timestamped):
 
     def to_rerun(
         self,
-        radii: float = 0.025,
+        voxel_size: float = 0.05,
         colormap: str | None = "turbo",
         colors: list[int] | None = None,
         mode: str = "boxes",
@@ -635,7 +635,7 @@ class PointCloud2(Timestamped):
         """Convert to Rerun Points3D or Boxes3D archetype.
 
         Args:
-            radii: Point radius for visualization (only for mode="points")
+            voxel_size: size for visualization
             colormap: Optional colormap name (e.g., "turbo", "viridis") to color by height
             colors: Optional RGB color [r, g, b] for all points (0-255)
             mode: Visualization mode - "points" for spheres, "boxes" for cubes (default)
@@ -663,7 +663,7 @@ class PointCloud2(Timestamped):
 
         if mode == "boxes":
             # Use boxes for voxel visualization
-            box_size = size if size is not None else radii * 2
+            box_size = size if size is not None else voxel_size
             half = box_size / 2
             return rr.Boxes3D(
                 centers=points,
@@ -674,7 +674,7 @@ class PointCloud2(Timestamped):
         else:
             return rr.Points3D(
                 positions=points,
-                radii=radii,
+                radii=voxel_size / 2,
                 colors=point_colors,
             )
 
