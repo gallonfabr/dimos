@@ -81,7 +81,7 @@ We’ll go through these layers top-down.
 
 See [Blueprints](blueprints.md) for the blueprint API.
 
-From [`unitree_go2_blueprints.py`](/dimos/robot/unitree_webrtc/unitree_go2_blueprints.py).
+From [`unitree/go2/all_blueprints.py`](/dimos/robot/unitree/go2/all_blueprints.py).
 
 Example: rebind a few streams from the default `LCMTransport` to `ROSTransport` (defined at [`transport.py`](/dimos/core/transport.py#L226)) so you can visualize in **rviz2**.
 

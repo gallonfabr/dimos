@@ -71,7 +71,7 @@ This happens on lower-end hardware (NUC, older laptops) with large maps.
 
 ### Increase Voxel Size
 
-Edit [`dimos/robot/unitree_webrtc/unitree_go2_blueprints.py`](/dimos/robot/unitree_webrtc/unitree_go2_blueprints.py) line 82:
+Edit [`dimos/robot/unitree/go2/all_blueprints.py`](/dimos/robot/unitree/go2/all_blueprints.py) line 82:
 
 ```python
 # Before (high detail, slower on large maps)
@@ -98,7 +98,7 @@ Rerun on `dev` is **module-driven**: modules decide what to log, and `Blueprint.
 
 - **Worker processes must connect before logging**
   - If a module is going to call `rr.log(...)`, it should call `connect_rerun(global_config=...)` first (see examples in:
-    - [`dimos/robot/unitree/connection/go2.py`](/dimos/robot/unitree/connection/go2.py)
+    - [`dimos/robot/unitree/go2/connection.py`](/dimos/robot/unitree/go2/connection.py)
     - [`dimos/mapping/costmapper.py`](/dimos/mapping/costmapper.py)
     - [`dimos/mapping/voxels.py`](/dimos/mapping/voxels.py)
     - [`dimos/navigation/replanning_a_star/module.py`](/dimos/navigation/replanning_a_star/module.py)
@@ -235,7 +235,7 @@ This appendix is an **inventory of every current Rerun touchpoint** in the repos
 ### Robot/device visualization (GO2)
 
 - **GO2 connection: sensor data logging + TF publishing**
-  - **File**: [`dimos/robot/unitree/connection/go2.py`](/dimos/robot/unitree/connection/go2.py)
+  - **File**: [`dimos/robot/unitree/go2/connection.py`](/dimos/robot/unitree/go2/connection.py)
   - **What**:
     - Connects to Rerun via `connect_rerun()` (only to log sensor data).
     - Publishes TF transforms via `self.tf.publish(...)` (base_link, camera_link, camera_optical).

@@ -15,4 +15,4 @@
 
 """Compatibility re-export for dimos.robot.unitree_webrtc.type.${name}."""
 
-from dimos.robot.unitree.type.${name} import *  # noqa: F401,F403
+from dimos.robot.unitree.type.lowstate import *  # noqa: F403
