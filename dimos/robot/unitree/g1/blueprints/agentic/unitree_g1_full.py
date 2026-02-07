@@ -13,6 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Compatibility re-exports for legacy dimos.robot.unitree_webrtc.type.* imports."""
+"""Full featured G1 stack with agentic skills and teleop."""
 
-from dimos.robot.unitree.type import *  # noqa: F403
+from dimos.core.blueprints import autoconnect
+from dimos.robot.unitree.keyboard_teleop import keyboard_teleop
+
+from ..smart.unitree_g1_shm import unitree_g1_shm
+from ._agentic_skills import _agentic_skills
+
+unitree_g1_full = autoconnect(
+    unitree_g1_shm,
+    _agentic_skills,
+    keyboard_teleop(),
+)
+
+__all__ = ["unitree_g1_full"]

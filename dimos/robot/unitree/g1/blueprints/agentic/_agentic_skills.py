@@ -13,6 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Compatibility re-exports for legacy dimos.robot.unitree_webrtc.type.* imports."""
+"""Agentic skills used by higher-level G1 blueprints."""
 
-from dimos.robot.unitree.type import *  # noqa: F403
+from dimos.agents.agent import llm_agent
+from dimos.agents.cli.human import human_input
+from dimos.agents.skills.navigation import navigation_skill
+from dimos.core.blueprints import autoconnect
+from dimos.robot.unitree.g1.skill_container import g1_skills
+
+_agentic_skills = autoconnect(
+    llm_agent(),
+    human_input(),
+    navigation_skill(),
+    g1_skills(),
+)
+
+__all__ = ["_agentic_skills"]

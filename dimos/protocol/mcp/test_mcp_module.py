@@ -30,7 +30,7 @@ from dimos.protocol.skill.skill import SkillContainer, skill
 
 
 def test_unitree_blueprint_has_mcp() -> None:
-    contents = Path("dimos/robot/unitree_webrtc/unitree_go2_blueprints.py").read_text()
+    contents = Path("dimos/robot/unitree/go2/all_blueprints.py").read_text()
     assert "agentic_mcp" in contents
     assert "MCPModule.blueprint()" in contents
 

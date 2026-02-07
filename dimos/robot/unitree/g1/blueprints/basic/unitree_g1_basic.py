@@ -13,6 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Compatibility re-exports for legacy dimos.robot.unitree_webrtc.type.* imports."""
+"""Basic G1 stack: base sensors plus real robot connection and ROS nav."""
 
-from dimos.robot.unitree.type import *  # noqa: F403
+from dimos.core.blueprints import autoconnect
+from dimos.navigation.rosnav import ros_nav
+from dimos.robot.unitree.g1.connection import g1_connection
+
+from ..primitive.uintree_g1_primitive_no_nav import uintree_g1_basic_no_nav
+
+unitree_g1_basic = autoconnect(
+    uintree_g1_basic_no_nav,
+    g1_connection(),
+    ros_nav(),
+)
+
+__all__ = ["unitree_g1_basic"]

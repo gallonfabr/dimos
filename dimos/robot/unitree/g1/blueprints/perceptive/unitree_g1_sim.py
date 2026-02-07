@@ -13,6 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Compatibility re-exports for legacy dimos.robot.unitree_webrtc.type.* imports."""
+"""G1 sim stack with perception and memory."""
 
-from dimos.robot.unitree.type import *  # noqa: F403
+from dimos.core.blueprints import autoconnect
+
+from ..basic.unitree_g1_basic_sim import unitree_g1_basic_sim
+from ._perception_and_memory import _perception_and_memory
+
+unitree_g1_sim = autoconnect(
+    unitree_g1_basic_sim,
+    _perception_and_memory,
+).global_config(n_dask_workers=8)
+
+__all__ = ["unitree_g1_sim"]

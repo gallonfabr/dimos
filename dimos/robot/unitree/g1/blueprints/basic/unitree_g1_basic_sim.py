@@ -13,6 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Compatibility re-exports for legacy dimos.robot.unitree_webrtc.type.* imports."""
+"""Basic G1 sim stack: base sensors plus sim connection and planner."""
 
-from dimos.robot.unitree.type import *  # noqa: F403
+from dimos.core.blueprints import autoconnect
+from dimos.navigation.replanning_a_star.module import replanning_a_star_planner
+from dimos.robot.unitree.g1.sim import g1_sim_connection
+
+from .unitree_g1_basic import unitree_g1_basic
+
+unitree_g1_basic_sim = autoconnect(
+    unitree_g1_basic.uintree_g1_basic_no_nav,
+    g1_sim_connection(),
+    replanning_a_star_planner(),
+)
+
+__all__ = ["unitree_g1_basic_sim"]

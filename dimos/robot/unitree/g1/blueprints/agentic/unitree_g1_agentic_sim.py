@@ -13,6 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Compatibility re-exports for legacy dimos.robot.unitree_webrtc.type.* imports."""
+"""Agentic G1 sim stack."""
 
-from dimos.robot.unitree.type import *  # noqa: F403
+from dimos.core.blueprints import autoconnect
+
+from ..smart.unitree_g1_sim import unitree_g1_sim
+from ._agentic_skills import _agentic_skills
+
+unitree_g1_agentic_sim = autoconnect(
+    unitree_g1_sim,
+    _agentic_skills,
+)
+
+__all__ = ["unitree_g1_agentic_sim"]

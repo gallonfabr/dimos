@@ -13,6 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Compatibility re-exports for legacy dimos.robot.unitree_webrtc.type.* imports."""
+"""G1 stack with keyboard teleop."""
 
-from dimos.robot.unitree.type import *  # noqa: F403
+from dimos.core.blueprints import autoconnect
+from dimos.robot.unitree.keyboard_teleop import keyboard_teleop
+
+from .unitree_g1_basic import unitree_g1_basic
+
+unitree_g1_joystick = autoconnect(
+    unitree_g1_basic,
+    keyboard_teleop(),  # Pygame-based joystick control
+)
+
+__all__ = ["unitree_g1_joystick"]
