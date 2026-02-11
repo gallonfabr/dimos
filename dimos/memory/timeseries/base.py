@@ -13,20 +13,25 @@
 # limitations under the License.
 """Unified time series storage and replay."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from collections.abc import Iterator
 import time
-from typing import Generic, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 import reactivex as rx
 from reactivex import operators as ops
 from reactivex.disposable import CompositeDisposable, Disposable
-from reactivex.observable import Observable
 from reactivex.scheduler import TimeoutScheduler
 
-from dimos.types.timestamped import Timestamped
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
-T = TypeVar("T", bound=Timestamped)
+    from reactivex.observable import Observable
+
+    from dimos.types.timestamped import Timestamped
+
+T = TypeVar("T", bound="Timestamped")
 
 
 class TimeSeriesStore(Generic[T], ABC):
@@ -177,7 +182,8 @@ class TimeSeriesStore(Generic[T], ABC):
 
     def prune_old(self, cutoff: float) -> None:
         """Prune items older than cutoff timestamp."""
-        for ts, _ in self._iter_items(end=cutoff):
+        to_delete = [ts for ts, _ in self._iter_items(end=cutoff)]
+        for ts in to_delete:
             self._delete(ts)
 
     def find_closest(
