@@ -11,11 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Unified timestamped sensor storage and replay."""
+"""Unified sensor storage and replay."""
 
 from abc import ABC, abstractmethod
 import bisect
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 import time
 from typing import Generic, TypeVar
 
@@ -27,14 +27,18 @@ from reactivex.scheduler import TimeoutScheduler
 
 from dimos.types.timestamped import Timestamped
 
-T = TypeVar("T", bound=Timestamped)
+T = TypeVar("T")
 
 
 class SensorStore(Generic[T], ABC):
-    """Unified storage + replay for timestamped sensor data.
+    """Unified storage + replay for sensor data.
 
     Implement 4 abstract methods for your backend (in-memory, pickle, sqlite, etc.).
     All iteration, streaming, and seek logic comes free from the base class.
+
+    T can be any type — timestamps are provided explicitly. For Timestamped
+    subclasses, convenience methods (save_ts, pipe_save_ts, consume_stream_ts)
+    automatically extract the .ts attribute.
     """
 
     @abstractmethod
@@ -61,31 +65,67 @@ class SensorStore(Generic[T], ABC):
         """Find closest timestamp. Backend can optimize (binary search, db index, etc.)."""
         ...
 
-    def save(self, *data: T) -> None:
-        """Save one or more timestamped data items using their .ts attribute."""
-        for item in data:
-            self._save(item.ts, item)
+    def save(self, timestamp: float, data: T) -> None:
+        """Save a single data item at the given timestamp."""
+        self._save(timestamp, data)
 
-    def pipe_save(self, source: Observable[T]) -> Observable[T]:
-        """Operator for use with .pipe() - saves each item and passes through.
+    def save_ts(self, *data: Timestamped) -> None:
+        """Save one or more Timestamped items using their .ts attribute."""
+        for item in data:
+            self._save(item.ts, item)  # type: ignore[arg-type]
+
+    def pipe_save(self, key: Callable[[T], float]) -> Callable[[Observable[T]], Observable[T]]:
+        """Operator for Observable.pipe() — saves each item using key(item) as timestamp.
 
         Usage:
-            observable.pipe(store.pipe_save).subscribe(...)
+            observable.pipe(store.pipe_save(lambda x: x.ts)).subscribe(...)
+        """
+
+        def _operator(source: Observable[T]) -> Observable[T]:
+            def _save_and_return(data: T) -> T:
+                self._save(key(data), data)
+                return data
+
+            return source.pipe(ops.map(_save_and_return))
+
+        return _operator
+
+    def pipe_save_ts(self, source: Observable[T]) -> Observable[T]:
+        """Operator for Observable.pipe() — saves Timestamped items using .ts.
+
+        Usage:
+            observable.pipe(store.pipe_save_ts).subscribe(...)
         """
 
         def _save_and_return(data: T) -> T:
-            self.save(data)
+            ts_data: Timestamped = data  # type: ignore[assignment]
+            self._save(ts_data.ts, data)
             return data
 
         return source.pipe(ops.map(_save_and_return))
 
-    def consume_stream(self, observable: Observable[T]) -> rx.abc.DisposableBase:
-        """Subscribe to an observable and save each item.
+    def consume_stream(
+        self, observable: Observable[T], key: Callable[[T], float]
+    ) -> rx.abc.DisposableBase:
+        """Subscribe to an observable and save each item using key(item) as timestamp.
 
         Usage:
-            disposable = store.consume_stream(observable)
+            disposable = store.consume_stream(observable, key=lambda x: x.ts)
         """
-        return observable.subscribe(on_next=self.save)
+        return observable.subscribe(on_next=lambda data: self._save(key(data), data))
+
+    def consume_stream_ts(self, observable: Observable[T]) -> rx.abc.DisposableBase:
+        """Subscribe to an observable and save Timestamped items using .ts.
+
+        Usage:
+            disposable = store.consume_stream_ts(observable)
+        """
+
+        def _save_item(data: T) -> None:
+            ts_data: Timestamped = data  # type: ignore[assignment]
+            self._save(ts_data.ts, data)
+
+        return observable.subscribe(on_next=_save_item)
 
     def load(self, timestamp: float) -> T | None:
         """Load data at exact timestamp."""
@@ -125,6 +165,35 @@ class SensorStore(Generic[T], ABC):
             return data
         return None
 
+    def iterate_items(
+        self,
+        seek: float | None = None,
+        duration: float | None = None,
+        from_timestamp: float | None = None,
+        loop: bool = False,
+    ) -> Iterator[tuple[float, T]]:
+        """Iterate over (timestamp, data) tuples with optional seek/duration."""
+        first = self.first_timestamp()
+        if first is None:
+            return
+
+        if from_timestamp is not None:
+            start = from_timestamp
+        elif seek is not None:
+            start = first + seek
+        else:
+            start = None
+
+        end = None
+        if duration is not None:
+            start_ts = start if start is not None else first
+            end = start_ts + duration
+
+        while True:
+            yield from self._iter_items(start=start, end=end)
+            if not loop:
+                break
+
     def iterate(
         self,
         seek: float | None = None,
@@ -133,29 +202,10 @@ class SensorStore(Generic[T], ABC):
         loop: bool = False,
     ) -> Iterator[T]:
         """Iterate over data items with optional seek/duration."""
-        first = self.first_timestamp()
-        if first is None:
-            return
-
-        # Calculate start timestamp
-        if from_timestamp is not None:
-            start = from_timestamp
-        elif seek is not None:
-            start = first + seek
-        else:
-            start = None
-
-        # Calculate end timestamp
-        end = None
-        if duration is not None:
-            start_ts = start if start is not None else first
-            end = start_ts + duration
-
-        while True:
-            for _, data in self._iter_items(start=start, end=end):
-                yield data
-            if not loop:
-                break
+        for _, data in self.iterate_items(
+            seek=seek, duration=duration, from_timestamp=from_timestamp, loop=loop
+        ):
+            yield data
 
     def iterate_realtime(
         self,
@@ -167,14 +217,14 @@ class SensorStore(Generic[T], ABC):
     ) -> Iterator[T]:
         """Iterate data, sleeping to match original timing."""
         prev_ts: float | None = None
-        for data in self.iterate(
+        for ts, data in self.iterate_items(
             seek=seek, duration=duration, from_timestamp=from_timestamp, loop=loop
         ):
             if prev_ts is not None:
-                delay = (data.ts - prev_ts) / speed
+                delay = (ts - prev_ts) / speed
                 if delay > 0:
                     time.sleep(delay)
-            prev_ts = data.ts
+            prev_ts = ts
             yield data
 
     def stream(
@@ -198,45 +248,41 @@ class SensorStore(Generic[T], ABC):
             disp = CompositeDisposable()
             is_disposed = False
 
-            iterator = self.iterate(
+            iterator = self.iterate_items(
                 seek=seek, duration=duration, from_timestamp=from_timestamp, loop=loop
             )
 
-            # Get first message
             try:
-                first_data = next(iterator)
+                first_ts, first_data = next(iterator)
             except StopIteration:
                 observer.on_completed()
                 return Disposable()
 
-            # Establish timing reference (absolute time prevents drift)
             start_local_time = time.time()
-            start_replay_time = first_data.ts
+            start_replay_time = first_ts
 
-            # Emit first sample immediately
             observer.on_next(first_data)
 
-            # Pre-load next message
             try:
-                next_message: T | None = next(iterator)
+                next_message: tuple[float, T] | None = next(iterator)
             except StopIteration:
                 observer.on_completed()
                 return disp
 
-            def schedule_emission(data: T) -> None:
+            def schedule_emission(message: tuple[float, T]) -> None:
                 nonlocal next_message, is_disposed
 
                 if is_disposed:
                     return
 
-                # Pre-load the following message while we have time
+                msg_ts, msg_data = message
+
                 try:
                     next_message = next(iterator)
                 except StopIteration:
                     next_message = None
 
-                # Calculate absolute emission time
-                target_time = start_local_time + (data.ts - start_replay_time) / speed
+                target_time = start_local_time + (msg_ts - start_replay_time) / speed
                 delay = max(0.0, target_time - time.time())
 
                 def emit(
@@ -244,7 +290,7 @@ class SensorStore(Generic[T], ABC):
                 ) -> rx.abc.DisposableBase | None:
                     if is_disposed:
                         return None
-                    observer.on_next(data)
+                    observer.on_next(msg_data)
                     if next_message is not None:
                         schedule_emission(next_message)
                     else:

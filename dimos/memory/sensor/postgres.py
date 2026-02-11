@@ -18,7 +18,7 @@ import pickle
 import re
 
 import psycopg2
-from psycopg2.extensions import connection as PgConnection
+import psycopg2.extensions
 
 from dimos.core.resource import Resource
 from dimos.memory.sensor.base import SensorStore, T
@@ -50,7 +50,7 @@ class PostgresStore(SensorStore[T], Resource):
         store.start()  # open connection
 
         # Use store
-        store.save(data)  # uses data.ts for timestamp
+        store.save(data.ts, data)  # explicit timestamp
         data = store.find_closest_seek(10.0)
 
         # Cleanup
@@ -85,7 +85,7 @@ class PostgresStore(SensorStore[T], Resource):
         self._host = host
         self._port = port
         self._user = user
-        self._conn: PgConnection | None = None
+        self._conn: psycopg2.extensions.connection | None = None
         self._table_created = False
 
     def start(self) -> None:
@@ -105,7 +105,7 @@ class PostgresStore(SensorStore[T], Resource):
             self._conn.close()
             self._conn = None
 
-    def _get_conn(self) -> PgConnection:
+    def _get_conn(self) -> psycopg2.extensions.connection:
         """Get connection, starting if needed."""
         if self._conn is None:
             self.start()

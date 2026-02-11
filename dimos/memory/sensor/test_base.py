@@ -154,8 +154,8 @@ class TestSensorStore:
 
     def test_save_and_load(self, store_factory, store_name, temp_dir):
         store = store_factory(temp_dir)
-        store.save(SampleData("data_at_1", 1.0))
-        store.save(SampleData("data_at_2", 2.0))
+        store.save(1.0, SampleData("data_at_1", 1.0))
+        store.save(2.0, SampleData("data_at_2", 2.0))
 
         assert store.load(1.0) == SampleData("data_at_1", 1.0)
         assert store.load(2.0) == SampleData("data_at_2", 2.0)
@@ -163,9 +163,9 @@ class TestSensorStore:
 
     def test_find_closest_timestamp(self, store_factory, store_name, temp_dir):
         store = store_factory(temp_dir)
-        store.save(SampleData("a", 1.0))
-        store.save(SampleData("b", 2.0))
-        store.save(SampleData("c", 3.0))
+        store.save(1.0, SampleData("a", 1.0))
+        store.save(2.0, SampleData("b", 2.0))
+        store.save(3.0, SampleData("c", 3.0))
 
         # Exact match
         assert store._find_closest_timestamp(2.0) == 2.0
@@ -182,9 +182,9 @@ class TestSensorStore:
 
     def test_iter_items(self, store_factory, store_name, temp_dir):
         store = store_factory(temp_dir)
-        store.save(SampleData("a", 1.0))
-        store.save(SampleData("b", 2.0))
-        store.save(SampleData("c", 3.0))
+        store.save(1.0, SampleData("a", 1.0))
+        store.save(2.0, SampleData("b", 2.0))
+        store.save(3.0, SampleData("c", 3.0))
 
         # Should iterate in timestamp order
         items = list(store._iter_items())
@@ -196,10 +196,10 @@ class TestSensorStore:
 
     def test_iter_items_with_range(self, store_factory, store_name, temp_dir):
         store = store_factory(temp_dir)
-        store.save(SampleData("a", 1.0))
-        store.save(SampleData("b", 2.0))
-        store.save(SampleData("c", 3.0))
-        store.save(SampleData("d", 4.0))
+        store.save(1.0, SampleData("a", 1.0))
+        store.save(2.0, SampleData("b", 2.0))
+        store.save(3.0, SampleData("c", 3.0))
+        store.save(4.0, SampleData("d", 4.0))
 
         # Start only
         items = list(store._iter_items(start=2.0))
@@ -232,9 +232,9 @@ class TestSensorStore:
         assert store.first_timestamp() is None
 
         # Add data (in chronological order)
-        store.save(SampleData("a", 1.0))
-        store.save(SampleData("b", 2.0))
-        store.save(SampleData("c", 3.0))
+        store.save(1.0, SampleData("a", 1.0))
+        store.save(2.0, SampleData("b", 2.0))
+        store.save(3.0, SampleData("c", 3.0))
 
         # Should return first by timestamp
         assert store.first_timestamp() == 1.0
@@ -242,9 +242,9 @@ class TestSensorStore:
 
     def test_find_closest(self, store_factory, store_name, temp_dir):
         store = store_factory(temp_dir)
-        store.save(SampleData("a", 1.0))
-        store.save(SampleData("b", 2.0))
-        store.save(SampleData("c", 3.0))
+        store.save(1.0, SampleData("a", 1.0))
+        store.save(2.0, SampleData("b", 2.0))
+        store.save(3.0, SampleData("c", 3.0))
 
         # Exact match
         assert store.find_closest(2.0) == SampleData("b", 2.0)
@@ -261,9 +261,9 @@ class TestSensorStore:
 
     def test_find_closest_seek(self, store_factory, store_name, temp_dir):
         store = store_factory(temp_dir)
-        store.save(SampleData("a", 10.0))
-        store.save(SampleData("b", 11.0))
-        store.save(SampleData("c", 12.0))
+        store.save(10.0, SampleData("a", 10.0))
+        store.save(11.0, SampleData("b", 11.0))
+        store.save(12.0, SampleData("c", 12.0))
 
         # Seek 0 = first item (10.0)
         assert store.find_closest_seek(0.0) == SampleData("a", 10.0)
@@ -283,9 +283,9 @@ class TestSensorStore:
 
     def test_iterate(self, store_factory, store_name, temp_dir):
         store = store_factory(temp_dir)
-        store.save(SampleData("a", 1.0))
-        store.save(SampleData("b", 2.0))
-        store.save(SampleData("c", 3.0))
+        store.save(1.0, SampleData("a", 1.0))
+        store.save(2.0, SampleData("b", 2.0))
+        store.save(3.0, SampleData("c", 3.0))
 
         # Should iterate in timestamp order, returning data only (not tuples)
         items = list(store.iterate())
@@ -297,10 +297,10 @@ class TestSensorStore:
 
     def test_iterate_with_seek_and_duration(self, store_factory, store_name, temp_dir):
         store = store_factory(temp_dir)
-        store.save(SampleData("a", 10.0))
-        store.save(SampleData("b", 11.0))
-        store.save(SampleData("c", 12.0))
-        store.save(SampleData("d", 13.0))
+        store.save(10.0, SampleData("a", 10.0))
+        store.save(11.0, SampleData("b", 11.0))
+        store.save(12.0, SampleData("c", 12.0))
+        store.save(13.0, SampleData("d", 13.0))
 
         # Seek from start
         items = list(store.iterate(seek=1.0))
@@ -322,11 +322,11 @@ class TestSensorStore:
         items = list(store.iterate(from_timestamp=12.0))
         assert items == [SampleData("c", 12.0), SampleData("d", 13.0)]
 
-    def test_variadic_save(self, store_factory, store_name, temp_dir):
+    def test_save_ts(self, store_factory, store_name, temp_dir):
         store = store_factory(temp_dir)
 
-        # Save multiple items at once
-        store.save(
+        # Save multiple Timestamped items using save_ts
+        store.save_ts(
             SampleData("a", 1.0),
             SampleData("b", 2.0),
             SampleData("c", 3.0),
@@ -336,7 +336,7 @@ class TestSensorStore:
         assert store.load(2.0) == SampleData("b", 2.0)
         assert store.load(3.0) == SampleData("c", 3.0)
 
-    def test_pipe_save(self, store_factory, store_name, temp_dir):
+    def test_pipe_save_ts(self, store_factory, store_name, temp_dir):
         import reactivex as rx
 
         store = store_factory(temp_dir)
@@ -348,9 +348,9 @@ class TestSensorStore:
             SampleData("c", 3.0),
         )
 
-        # Pipe through store.pipe_save - should save and pass through
+        # Pipe through store.pipe_save_ts — should save and pass through
         results: list[SampleData] = []
-        source.pipe(store.pipe_save).subscribe(results.append)
+        source.pipe(store.pipe_save_ts).subscribe(results.append)
 
         # Data should be saved
         assert store.load(1.0) == SampleData("a", 1.0)
@@ -364,7 +364,24 @@ class TestSensorStore:
             SampleData("c", 3.0),
         ]
 
-    def test_consume_stream(self, store_factory, store_name, temp_dir):
+    def test_pipe_save_with_key(self, store_factory, store_name, temp_dir):
+        import reactivex as rx
+
+        store = store_factory(temp_dir)
+
+        source = rx.of(
+            SampleData("a", 1.0),
+            SampleData("b", 2.0),
+        )
+
+        results: list[SampleData] = []
+        source.pipe(store.pipe_save(lambda d: d.ts)).subscribe(results.append)
+
+        assert store.load(1.0) == SampleData("a", 1.0)
+        assert store.load(2.0) == SampleData("b", 2.0)
+        assert len(results) == 2
+
+    def test_consume_stream_ts(self, store_factory, store_name, temp_dir):
         import reactivex as rx
 
         store = store_factory(temp_dir)
@@ -376,8 +393,8 @@ class TestSensorStore:
             SampleData("c", 3.0),
         )
 
-        # Consume stream - should save all items
-        disposable = store.consume_stream(source)
+        # Consume stream — should save all items
+        disposable = store.consume_stream_ts(source)
 
         # Data should be saved
         assert store.load(1.0) == SampleData("a", 1.0)
@@ -386,11 +403,46 @@ class TestSensorStore:
 
         disposable.dispose()
 
+    def test_consume_stream_with_key(self, store_factory, store_name, temp_dir):
+        import reactivex as rx
+
+        store = store_factory(temp_dir)
+
+        source = rx.of(
+            SampleData("a", 1.0),
+            SampleData("b", 2.0),
+        )
+
+        disposable = store.consume_stream(source, key=lambda d: d.ts)
+
+        assert store.load(1.0) == SampleData("a", 1.0)
+        assert store.load(2.0) == SampleData("b", 2.0)
+
+        disposable.dispose()
+
+    def test_iterate_items(self, store_factory, store_name, temp_dir):
+        store = store_factory(temp_dir)
+        store.save(1.0, SampleData("a", 1.0))
+        store.save(2.0, SampleData("b", 2.0))
+        store.save(3.0, SampleData("c", 3.0))
+
+        items = list(store.iterate_items())
+        assert items == [
+            (1.0, SampleData("a", 1.0)),
+            (2.0, SampleData("b", 2.0)),
+            (3.0, SampleData("c", 3.0)),
+        ]
+
+        # With seek
+        items = list(store.iterate_items(seek=1.0))
+        assert len(items) == 2
+        assert items[0] == (2.0, SampleData("b", 2.0))
+
     def test_stream_basic(self, store_factory, store_name, temp_dir):
         store = store_factory(temp_dir)
-        store.save(SampleData("a", 1.0))
-        store.save(SampleData("b", 2.0))
-        store.save(SampleData("c", 3.0))
+        store.save(1.0, SampleData("a", 1.0))
+        store.save(2.0, SampleData("b", 2.0))
+        store.save(3.0, SampleData("c", 3.0))
 
         # Stream at high speed (essentially instant)
         results: list[SampleData] = []
@@ -409,3 +461,68 @@ class TestSensorStore:
             SampleData("b", 2.0),
             SampleData("c", 3.0),
         ]
+
+
+class TestNonTimestampedData:
+    """Test SensorStore with plain (non-Timestamped) data types."""
+
+    def test_store_plain_strings(self):
+        store: InMemoryStore[str] = InMemoryStore()
+        store.save(1.0, "hello")
+        store.save(2.0, "world")
+
+        assert store.load(1.0) == "hello"
+        assert store.load(2.0) == "world"
+        assert store.first() == "hello"
+        assert store.first_timestamp() == 1.0
+
+    def test_iterate_plain_data(self):
+        store: InMemoryStore[int] = InMemoryStore()
+        store.save(10.0, 100)
+        store.save(20.0, 200)
+        store.save(30.0, 300)
+
+        assert list(store.iterate()) == [100, 200, 300]
+        assert list(store.iterate_items()) == [(10.0, 100), (20.0, 200), (30.0, 300)]
+
+    def test_find_closest_plain_data(self):
+        store: InMemoryStore[str] = InMemoryStore()
+        store.save(1.0, "a")
+        store.save(3.0, "b")
+        store.save(5.0, "c")
+
+        assert store.find_closest(2.0) == "a"
+        assert store.find_closest(4.0) == "b"
+        assert store.find_closest_seek(2.0) == "b"
+
+    def test_pipe_save_with_key_plain_data(self):
+        import reactivex as rx
+
+        store: InMemoryStore[dict] = InMemoryStore()
+        source = rx.of(
+            {"ts": 1.0, "val": "x"},
+            {"ts": 2.0, "val": "y"},
+        )
+
+        results: list[dict] = []
+        source.pipe(store.pipe_save(lambda d: d["ts"])).subscribe(results.append)
+
+        assert store.load(1.0) == {"ts": 1.0, "val": "x"}
+        assert store.load(2.0) == {"ts": 2.0, "val": "y"}
+        assert len(results) == 2
+
+    def test_consume_stream_with_key_plain_data(self):
+        import reactivex as rx
+
+        store: InMemoryStore[list] = InMemoryStore()
+        source = rx.of(
+            [1.0, "data_a"],
+            [2.0, "data_b"],
+        )
+
+        disposable = store.consume_stream(source, key=lambda d: d[0])
+
+        assert store.load(1.0) == [1.0, "data_a"]
+        assert store.load(2.0) == [2.0, "data_b"]
+
+        disposable.dispose()

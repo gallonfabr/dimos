@@ -40,7 +40,7 @@ class PickleDirStore(SensorStore[T]):
 
         # Create new recording (directory created on first save)
         store = PickleDirStore("my_recording/images")
-        store.save(image)  # uses image.ts for timestamp
+        store.save(image.ts, image)  # explicit timestamp
     """
 
     def __init__(self, name: str) -> None:

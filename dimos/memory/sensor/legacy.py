@@ -53,7 +53,7 @@ class LegacyPickleStore(SensorStore[T]):
 
         # Create new recording (directory created on first save)
         store = LegacyPickleStore("my_recording/images")
-        store.save(image)  # uses image.ts for timestamp
+        store.save_ts(image)  # uses image.ts for timestamp
 
     Backward compatibility:
         This class also supports the old TimedSensorReplay/SensorReplay API:
