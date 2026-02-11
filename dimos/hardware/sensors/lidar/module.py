@@ -14,25 +14,20 @@
 
 """LiDAR module wrappers that convert LidarHardware observables into module streams."""
 
-from __future__ import annotations
-
+from collections.abc import Callable
 from dataclasses import dataclass, field
 import time
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import reactivex as rx
 from reactivex import operators as ops
 
 from dimos.core import Module, ModuleConfig, Out, rpc
+from dimos.hardware.sensors.lidar.spec import LidarHardware
 from dimos.msgs.geometry_msgs import Quaternion, Transform, Vector3
+from dimos.msgs.sensor_msgs.Imu import Imu
+from dimos.msgs.sensor_msgs.PointCloud2 import PointCloud2
 from dimos.spec import perception
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from dimos.hardware.sensors.lidar.spec import LidarHardware
-    from dimos.msgs.sensor_msgs.Imu import Imu
-    from dimos.msgs.sensor_msgs.PointCloud2 import PointCloud2
 
 
 def default_lidar_transform() -> Transform:
