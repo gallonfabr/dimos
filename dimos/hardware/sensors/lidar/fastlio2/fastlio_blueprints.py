@@ -26,7 +26,7 @@ mid360_fastlio = autoconnect(
 rerun_config = {}
 
 mid360_fastlio_voxels = autoconnect(
-    FastLio2Module.blueprint(),
+    FastLio2.blueprint(),
     VoxelGridMapper.blueprint(publish_interval=0.5, voxel_size=0.1, carve_columns=False),
     rerun_bridge(
         visual_override={

@@ -64,8 +64,8 @@ class FastLio2Config(NativeModuleConfig):
     odom_freq: float = 30.0
 
     # FAST-LIO config (written to JSON, passed as --config_path)
-    scan_line: int = 1
-    blind: float = 1.0
+    scan_line: int = 4
+    blind: float = 0.5
     fov_degree: int = 360
     det_range: float = 100.0
     acc_cov: float = 0.1
@@ -73,7 +73,7 @@ class FastLio2Config(NativeModuleConfig):
     b_acc_cov: float = 0.0001
     b_gyr_cov: float = 0.0001
     extrinsic_est_en: bool = True
-    extrinsic_t: list[float] = field(default_factory=lambda: [0.04165, 0.02326, -0.0284])
+    extrinsic_t: list[float] = field(default_factory=lambda: [-0.011, -0.02329, 0.04412])
     extrinsic_r: list[float] = field(
         default_factory=lambda: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
     )

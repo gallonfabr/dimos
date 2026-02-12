@@ -30,17 +30,18 @@ endif()
 # Fetch dependencies
 include(FetchContent)
 
-# FAST-LIO-NON-ROS
-FetchContent_Declare(fastlio
-  GIT_REPOSITORY https://github.com/leshy/FAST-LIO-NON-ROS.git
-  GIT_TAG dimos-integration
-  GIT_SHALLOW TRUE
-)
-FetchContent_GetProperties(fastlio)
-if(NOT fastlio_POPULATED)
-  FetchContent_Populate(fastlio)
-endif()
-set(FASTLIO_DIR ${fastlio_SOURCE_DIR})
+# FAST-LIO-NON-ROS (local checkout for development)
+set(FASTLIO_DIR $ENV{HOME}/coding/FAST-LIO-NON-ROS)
+# FetchContent_Declare(fastlio
+#   GIT_REPOSITORY https://github.com/leshy/FAST-LIO-NON-ROS.git
+#   GIT_TAG dimos-integration
+#   GIT_SHALLOW TRUE
+# )
+# FetchContent_GetProperties(fastlio)
+# if(NOT fastlio_POPULATED)
+#   FetchContent_Populate(fastlio)
+# endif()
+# set(FASTLIO_DIR ${fastlio_SOURCE_DIR})
 
 # dimos-lcm C++ message headers
 FetchContent_Declare(dimos_lcm
