@@ -32,6 +32,7 @@
 
 #include "cloud_filter.hpp"
 #include "dimos_native_module.hpp"
+#include "voxel_map.hpp"
 
 // dimos LCM message headers
 #include "geometry_msgs/Quaternion.hpp"
@@ -64,6 +65,7 @@ static FastLio* g_fastlio = nullptr;
 
 static std::string g_lidar_topic;
 static std::string g_odometry_topic;
+static std::string g_map_topic;
 static std::string g_frame_id = "map";
 static std::string g_child_frame_id = "body";
 static float g_frequency = 10.0f;
@@ -107,8 +109,10 @@ static std_msgs::Header make_header(const std::string& frame_id, double ts) {
 // Publish lidar (world-frame point cloud)
 // ---------------------------------------------------------------------------
 
-static void publish_lidar(PointCloudXYZI::Ptr cloud, double timestamp) {
-    if (!g_lcm || !cloud || cloud->empty()) return;
+static void publish_lidar(PointCloudXYZI::Ptr cloud, double timestamp,
+                          const std::string& topic = "") {
+    const std::string& chan = topic.empty() ? g_lidar_topic : topic;
+    if (!g_lcm || !cloud || cloud->empty() || chan.empty()) return;
 
     int num_points = static_cast<int>(cloud->size());
 
@@ -151,7 +155,7 @@ static void publish_lidar(PointCloudXYZI::Ptr cloud, double timestamp) {
         dst[3] = cloud->points[i].intensity;
     }
 
-    g_lcm->publish(g_lidar_topic, &pc);
+    g_lcm->publish(chan, &pc);
 }
 
 // ---------------------------------------------------------------------------
@@ -376,6 +380,7 @@ int main(int argc, char** argv) {
     // Required: LCM topics for output ports
     g_lidar_topic = mod.has("lidar") ? mod.topic("lidar") : "";
     g_odometry_topic = mod.has("odometry") ? mod.topic("odometry") : "";
+    g_map_topic = mod.has("global_map") ? mod.topic("global_map") : "";
 
     if (g_lidar_topic.empty() && g_odometry_topic.empty()) {
         fprintf(stderr, "Error: at least one of --lidar or --odometry is required\n");
@@ -401,6 +406,9 @@ int main(int argc, char** argv) {
     filter_cfg.voxel_size = mod.arg_float("voxel_size", 0.1f);
     filter_cfg.sor_mean_k = mod.arg_int("sor_mean_k", 50);
     filter_cfg.sor_stddev = mod.arg_float("sor_stddev", 1.0f);
+    float map_voxel_size = mod.arg_float("map_voxel_size", 0.1f);
+    float map_max_range = mod.arg_float("map_max_range", 100.0f);
+    float map_freq = mod.arg_float("map_freq", 0.0f);
 
     // SDK network ports
     SdkPorts ports;
@@ -420,6 +428,8 @@ int main(int argc, char** argv) {
            g_lidar_topic.empty() ? "(disabled)" : g_lidar_topic.c_str());
     printf("[fastlio2] odometry topic: %s\n",
            g_odometry_topic.empty() ? "(disabled)" : g_odometry_topic.c_str());
+    printf("[fastlio2] global_map topic: %s\n",
+           g_map_topic.empty() ? "(disabled)" : g_map_topic.c_str());
     printf("[fastlio2] config: %s\n", config_path.c_str());
     printf("[fastlio2] host_ip: %s  lidar_ip: %s  frequency: %.1f Hz\n",
            host_ip.c_str(), lidar_ip.c_str(), g_frequency);
@@ -427,6 +437,9 @@ int main(int argc, char** argv) {
            pointcloud_freq, odom_freq);
     printf("[fastlio2] voxel_size: %.3f  sor_mean_k: %d  sor_stddev: %.1f\n",
            filter_cfg.voxel_size, filter_cfg.sor_mean_k, filter_cfg.sor_stddev);
+    if (!g_map_topic.empty())
+        printf("[fastlio2] map_voxel_size: %.3f  map_max_range: %.1f  map_freq: %.1f Hz\n",
+               map_voxel_size, map_max_range, map_freq);
 
     // Signal handlers
     signal(SIGTERM, signal_handler);
@@ -489,8 +502,15 @@ int main(int argc, char** argv) {
     auto last_pc_publish = std::chrono::steady_clock::now();
     auto last_odom_publish = std::chrono::steady_clock::now();
 
-    // Accumulate world-frame scans between pointcloud publishes
-    PointCloudXYZI::Ptr accumulated_scan(new PointCloudXYZI());
+    // Global voxel map (only if map topic is configured AND map_freq > 0)
+    std::unique_ptr<VoxelMap> global_map;
+    std::chrono::microseconds map_interval{0};
+    auto last_map_publish = std::chrono::steady_clock::now();
+    if (!g_map_topic.empty() && map_freq > 0.0f) {
+        global_map = std::make_unique<VoxelMap>(map_voxel_size, map_max_range);
+        map_interval = std::chrono::microseconds(
+            static_cast<int64_t>(1e6 / map_freq));
+    }
 
     while (g_running.load()) {
         auto loop_start = std::chrono::high_resolution_clock::now();
@@ -539,19 +559,29 @@ int main(int argc, char** argv) {
             double ts = std::chrono::duration<double>(
                 std::chrono::system_clock::now().time_since_epoch()).count();
 
-            // Accumulate registered scans between publishes
-            if (!g_lidar_topic.empty()) {
-                auto world_cloud = fast_lio.get_world_cloud();
-                if (world_cloud && !world_cloud->empty()) {
-                    *accumulated_scan += *world_cloud;
+            auto world_cloud = fast_lio.get_world_cloud();
+            if (world_cloud && !world_cloud->empty()) {
+                auto filtered = filter_cloud<PointType>(world_cloud, filter_cfg);
+
+                // Per-scan publish at pointcloud_freq
+                if (!g_lidar_topic.empty() && now - last_pc_publish >= pc_interval) {
+                    publish_lidar(filtered, ts);
+                    last_pc_publish = now;
                 }
 
-                // Publish aggregated cloud at pointcloud_freq
-                if (now - last_pc_publish >= pc_interval && !accumulated_scan->empty()) {
-                    auto filtered = filter_cloud<PointType>(accumulated_scan, filter_cfg);
-                    publish_lidar(filtered, ts);
-                    accumulated_scan->clear();
-                    last_pc_publish = now;
+                // Global map: insert, prune, and publish at map_freq
+                if (global_map) {
+                    global_map->insert<PointType>(filtered);
+
+                    if (now - last_map_publish >= map_interval) {
+                        global_map->prune(
+                            static_cast<float>(pose[0]),
+                            static_cast<float>(pose[1]),
+                            static_cast<float>(pose[2]));
+                        auto map_cloud = global_map->to_cloud<PointType>();
+                        publish_lidar(map_cloud, ts, g_map_topic);
+                        last_map_publish = now;
+                    }
                 }
             }
 

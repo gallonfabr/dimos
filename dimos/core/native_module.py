@@ -40,7 +40,7 @@ Example usage::
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 import enum
 import json
 import os
@@ -71,6 +71,44 @@ class NativeModuleConfig(ModuleConfig):
     cwd: str | None = None
     shutdown_timeout: float = 10.0
     log_format: LogFormat = LogFormat.TEXT
+
+    # Field names from base classes that should not be converted to CLI args
+    _BASE_FIELDS: frozenset[str] = field(default=frozenset(), init=False, repr=False, compare=False)
+
+    def __post_init__(self):
+        # Collect all field names from NativeModuleConfig and its parents
+        object.__setattr__(
+            self,
+            "_BASE_FIELDS",
+            frozenset(f.name for f in fields(NativeModuleConfig)),
+        )
+
+    # Override in subclasses to exclude fields from CLI arg generation
+    cli_exclude: frozenset[str] = frozenset()
+
+    def to_cli_args(self) -> list[str]:
+        """Auto-convert subclass config fields to CLI args.
+
+        Iterates fields defined on the concrete subclass (not NativeModuleConfig
+        or its parents) and converts them to ``["--name", str(value)]`` pairs.
+        Skips fields whose values are ``None`` and fields in ``cli_exclude``.
+        """
+        args: list[str] = []
+        for f in fields(self):
+            if f.name in self._BASE_FIELDS or f.name.startswith("_"):
+                continue
+            if f.name in self.cli_exclude:
+                continue
+            val = getattr(self, f.name)
+            if val is None:
+                continue
+            if isinstance(val, bool):
+                args.extend([f"--{f.name}", str(val).lower()])
+            elif isinstance(val, list):
+                args.extend([f"--{f.name}", ",".join(str(v) for v in val)])
+            else:
+                args.extend([f"--{f.name}", str(val)])
+        return args
 
 
 class NativeModule(Module):

@@ -84,39 +84,7 @@ class Mid360CppModule(NativeModule, perception.Lidar, perception.IMU):
 
     def _build_extra_args(self) -> list[str]:
         """Pass hardware config to the C++ binary as CLI args."""
-        cfg: Mid360CppConfig = self.config  # type: ignore[assignment]
-        return [
-            "--host_ip",
-            cfg.host_ip,
-            "--lidar_ip",
-            cfg.lidar_ip,
-            "--frequency",
-            str(cfg.frequency),
-            "--frame_id",
-            cfg.frame_id,
-            "--imu_frame_id",
-            cfg.imu_frame_id,
-            "--cmd_data_port",
-            str(cfg.cmd_data_port),
-            "--push_msg_port",
-            str(cfg.push_msg_port),
-            "--point_data_port",
-            str(cfg.point_data_port),
-            "--imu_data_port",
-            str(cfg.imu_data_port),
-            "--log_data_port",
-            str(cfg.log_data_port),
-            "--host_cmd_data_port",
-            str(cfg.host_cmd_data_port),
-            "--host_push_msg_port",
-            str(cfg.host_push_msg_port),
-            "--host_point_data_port",
-            str(cfg.host_point_data_port),
-            "--host_imu_data_port",
-            str(cfg.host_imu_data_port),
-            "--host_log_data_port",
-            str(cfg.host_log_data_port),
-        ]
+        return self.config.to_cli_args()
 
 
 mid360_cpp_module = Mid360CppModule.blueprint

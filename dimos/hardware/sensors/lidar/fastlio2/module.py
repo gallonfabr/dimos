@@ -68,7 +68,27 @@ class FastLio2Config(NativeModuleConfig):
     sor_mean_k: int = 50
     sor_stddev: float = 1.0
 
-    # FAST-LIO config (written to JSON, passed as --config_path)
+    # Global voxel map (disabled when map_freq <= 0)
+    map_freq: float = 0.0
+    map_voxel_size: float = 0.1
+    map_max_range: float = 100.0
+
+    # FAST-LIO config (written to JSON, passed as --config_path — excluded from CLI)
+    cli_exclude: frozenset[str] = frozenset(
+        {
+            "scan_line",
+            "blind",
+            "fov_degree",
+            "det_range",
+            "acc_cov",
+            "gyr_cov",
+            "b_acc_cov",
+            "b_gyr_cov",
+            "extrinsic_est_en",
+            "extrinsic_t",
+            "extrinsic_r",
+        }
+    )
     scan_line: int = 4
     blind: float = 0.5
     fov_degree: int = 360
@@ -102,60 +122,19 @@ class FastLio2(NativeModule):
     Ports:
         lidar (Out[PointCloud2]): World-frame registered point cloud.
         odometry (Out[Odometry]): Pose with covariance at LiDAR scan rate.
+        global_map (Out[PointCloud2]): Global voxel map (optional, enable via map_freq > 0).
     """
 
     default_config: type[FastLio2Config] = FastLio2Config  # type: ignore[assignment]
     lidar: Out[PointCloud2]
     odometry: Out[Odometry]
+    global_map: Out[PointCloud2]
 
     def _build_extra_args(self) -> list[str]:
         """Pass hardware and SLAM config to the C++ binary as CLI args."""
         cfg: FastLio2Config = self.config  # type: ignore[assignment]
         config_path = self._write_fastlio_config(cfg)
-        return [
-            "--config_path",
-            config_path,
-            "--host_ip",
-            cfg.host_ip,
-            "--lidar_ip",
-            cfg.lidar_ip,
-            "--frequency",
-            str(cfg.frequency),
-            "--frame_id",
-            cfg.frame_id,
-            "--child_frame_id",
-            cfg.child_frame_id,
-            "--pointcloud_freq",
-            str(cfg.pointcloud_freq),
-            "--odom_freq",
-            str(cfg.odom_freq),
-            "--voxel_size",
-            str(cfg.voxel_size),
-            "--sor_mean_k",
-            str(cfg.sor_mean_k),
-            "--sor_stddev",
-            str(cfg.sor_stddev),
-            "--cmd_data_port",
-            str(cfg.cmd_data_port),
-            "--push_msg_port",
-            str(cfg.push_msg_port),
-            "--point_data_port",
-            str(cfg.point_data_port),
-            "--imu_data_port",
-            str(cfg.imu_data_port),
-            "--log_data_port",
-            str(cfg.log_data_port),
-            "--host_cmd_data_port",
-            str(cfg.host_cmd_data_port),
-            "--host_push_msg_port",
-            str(cfg.host_push_msg_port),
-            "--host_point_data_port",
-            str(cfg.host_point_data_port),
-            "--host_imu_data_port",
-            str(cfg.host_imu_data_port),
-            "--host_log_data_port",
-            str(cfg.host_log_data_port),
-        ]
+        return ["--config_path", config_path, *cfg.to_cli_args()]
 
     @staticmethod
     def _write_fastlio_config(cfg: FastLio2Config) -> str:

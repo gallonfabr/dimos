@@ -20,10 +20,20 @@ from dimos.visualization.rerun.bridge import rerun_bridge
 voxel_size = 0.05
 
 mid360_fastlio = autoconnect(
-    FastLio2.blueprint(voxel_size=voxel_size),
+    FastLio2.blueprint(voxel_size=voxel_size, map_voxel_size=voxel_size, map_freq=-1),
     rerun_bridge(
         visual_override={
             "world/lidar": lambda grid: grid.to_rerun(voxel_size=voxel_size, mode="boxes"),
+        }
+    ),
+).global_config(n_dask_workers=2, robot_model="mid360_fastlio2")
+
+mid360_fastlio_voxels_native = autoconnect(
+    FastLio2.blueprint(voxel_size=voxel_size, map_voxel_size=voxel_size, map_freq=3.0),
+    rerun_bridge(
+        visual_override={
+            "world/lidar": None,
+            "world/global_map": lambda grid: grid.to_rerun(voxel_size=voxel_size, mode="boxes"),
         }
     ),
 ).global_config(n_dask_workers=2, robot_model="mid360_fastlio2")
