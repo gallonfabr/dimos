@@ -5,9 +5,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 
-# FAST-LIO-NON-ROS source directory (local reference)
-set(FASTLIO_DIR "$ENV{HOME}/coding/FAST-LIO-NON-ROS")
-
 # OpenMP for parallel processing
 find_package(OpenMP QUIET)
 if(OpenMP_CXX_FOUND)
@@ -30,8 +27,22 @@ else()
   add_definitions(-DMP_PROC_NUM=1)
 endif()
 
-# Fetch dimos-lcm for C++ message headers
+# Fetch dependencies
 include(FetchContent)
+
+# FAST-LIO-NON-ROS
+FetchContent_Declare(fastlio
+  GIT_REPOSITORY https://github.com/leshy/FAST-LIO-NON-ROS.git
+  GIT_TAG dimos-integration
+  GIT_SHALLOW TRUE
+)
+FetchContent_GetProperties(fastlio)
+if(NOT fastlio_POPULATED)
+  FetchContent_Populate(fastlio)
+endif()
+set(FASTLIO_DIR ${fastlio_SOURCE_DIR})
+
+# dimos-lcm C++ message headers
 FetchContent_Declare(dimos_lcm
   GIT_REPOSITORY https://github.com/dimensionalOS/dimos-lcm.git
   GIT_TAG main
