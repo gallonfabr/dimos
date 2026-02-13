@@ -41,8 +41,6 @@
 #include "sensor_msgs/Imu.hpp"
 #include "sensor_msgs/PointCloud2.hpp"
 #include "sensor_msgs/PointField.hpp"
-#include "std_msgs/Header.hpp"
-#include "std_msgs/Time.hpp"
 
 // FAST-LIO (header-only core, compiled sources linked via CMake)
 #include "fast_lio.hpp"
@@ -77,27 +75,14 @@ static bool g_frame_has_timestamp = false;
 // Helpers
 // ---------------------------------------------------------------------------
 
-static std_msgs::Time time_from_seconds(double t) {
-    std_msgs::Time ts;
-    ts.sec = static_cast<int32_t>(t);
-    ts.nsec = static_cast<int32_t>((t - ts.sec) * 1e9);
-    return ts;
-}
-
 static uint64_t get_timestamp_ns(const LivoxLidarEthernetPacket* pkt) {
     uint64_t ns = 0;
     std::memcpy(&ns, pkt->timestamp, sizeof(uint64_t));
     return ns;
 }
 
-static std_msgs::Header make_header(const std::string& frame_id, double ts) {
-    static std::atomic<int32_t> seq{0};
-    std_msgs::Header h;
-    h.seq = seq.fetch_add(1, std::memory_order_relaxed);
-    h.stamp = time_from_seconds(ts);
-    h.frame_id = frame_id;
-    return h;
-}
+using dimos::time_from_seconds;
+using dimos::make_header;
 
 // ---------------------------------------------------------------------------
 // Publish lidar (world-frame point cloud)

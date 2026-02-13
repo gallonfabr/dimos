@@ -6,9 +6,13 @@
 
 #pragma once
 
+#include <atomic>
 #include <map>
 #include <stdexcept>
 #include <string>
+
+#include "std_msgs/Header.hpp"
+#include "std_msgs/Time.hpp"
 
 namespace dimos {
 
@@ -60,5 +64,23 @@ public:
 private:
     std::map<std::string, std::string> args_;
 };
+
+/// Convert seconds (double) to a ROS-style Time message.
+inline std_msgs::Time time_from_seconds(double t) {
+    std_msgs::Time ts;
+    ts.sec = static_cast<int32_t>(t);
+    ts.nsec = static_cast<int32_t>((t - ts.sec) * 1e9);
+    return ts;
+}
+
+/// Build a stamped Header with auto-incrementing sequence number.
+inline std_msgs::Header make_header(const std::string& frame_id, double ts) {
+    static std::atomic<int32_t> seq{0};
+    std_msgs::Header h;
+    h.seq = seq.fetch_add(1, std::memory_order_relaxed);
+    h.stamp = time_from_seconds(ts);
+    h.frame_id = frame_id;
+    return h;
+}
 
 }  // namespace dimos

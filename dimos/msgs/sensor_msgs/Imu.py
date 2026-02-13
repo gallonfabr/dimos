@@ -22,11 +22,6 @@ from dimos.msgs.geometry_msgs import Quaternion, Vector3
 from dimos.types.timestamped import Timestamped
 
 
-def _sec_nsec(ts: float) -> tuple[int, int]:
-    s = int(ts)
-    return s, int((ts - s) * 1_000_000_000)
-
-
 class Imu(Timestamped):
     """IMU sensor message mirroring ROS sensor_msgs/Imu.
 
@@ -58,7 +53,7 @@ class Imu(Timestamped):
 
     def lcm_encode(self) -> bytes:
         msg = LCMImu()
-        msg.header.stamp.sec, msg.header.stamp.nsec = _sec_nsec(self.ts)
+        [msg.header.stamp.sec, msg.header.stamp.nsec] = self.ros_timestamp()
         msg.header.frame_id = self.frame_id
 
         msg.orientation.x = self.orientation.x
