@@ -8,7 +8,9 @@
                   ╚═════╝ ╚═╝╚═╝     ╚═╝╚══════╝╚═╝  ╚═══╝╚══════╝╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝
 </pre>
 <div align="center">
-The Agentive Operating System for Generalist Robotics
+
+**The Agentive Operating System for Generalist Robotics**
+
 
 [Features](#the-dimensional-framework) •
 [Installation](#installation) •
