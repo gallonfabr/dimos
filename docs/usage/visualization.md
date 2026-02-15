@@ -58,6 +58,33 @@ VIEWER_BACKEND=foxglove dimos run unitree-go2
 
 ---
 
+## Rendering with Custom Blueprints
+
+To enable rerun within your own blueprint simply include `RerunBridgeModule`:
+
+```py
+from dimos.visualization.rerun.bridge import RerunBridgeModule
+from dimos.hardware.camera.module import CameraModule
+from dimos.protocol.pubsub.impl.lcmpubsub import LCM
+
+# will not be rendered anywhere
+headless_camera = autoconnect(
+    CameraModule.blueprint(),
+)
+# will be rendered in rerun native
+camera_demo = autoconnect(
+    CameraModule.blueprint(),
+    RerunBridgeModule.blueprint(
+        viewer_mode="native", # native (desktop), web (browser), none (headless)
+    ),
+)
+
+if __name__ == "__main__":
+    camera_demo.build().loop()
+```
+
+Every LCM stream, such as `color_image` (output by CameraModule), that uses a data type (like `Image`) that has a `.to_rerun` method will get rendered (`rr.log`) using the LCM topic as the rerun entity path. In other words: to render something, simply log it to a stream and it will automatically be available in rerun.
+
 ## Performance Tuning
 
 ### Symptom: Slow Map Updates
