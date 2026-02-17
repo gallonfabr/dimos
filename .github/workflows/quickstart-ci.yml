@@ -5,11 +5,7 @@ on:
     branches:
       - main
       - dev
-    paths:
-      - "**/*.py"
   pull_request:
-    paths:
-      - "**/*.py"
 
 permissions:
   contents: read
