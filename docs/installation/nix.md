@@ -25,8 +25,8 @@ wget https://raw.githubusercontent.com/dimensionalOS/dimos/refs/heads/main/flake
 # enter the nix development shell (provides system deps)
 nix develop
 
-python3 -m venv env
-source env/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 
 # install everything (depending on your use case you might not need all extras,
 # check your respective platform guides)
@@ -44,8 +44,8 @@ cd dimos
 # enter the nix development shell (provides system deps)
 nix develop
 
-python3 -m venv env
-source env/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 
 pip install -e ".[misc,sim,visualization,agents,web,perception,unitree,manipulation,cpu,dev]"
 
