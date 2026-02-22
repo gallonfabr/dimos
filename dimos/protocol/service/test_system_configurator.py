@@ -33,7 +33,6 @@ from dimos.protocol.service.system_configurator import (
     _write_sysctl_int,
     configure_system,
     sudo_run,
-    system_checks,
 )
 
 # ----------------------------- Helper function tests -----------------------------
@@ -693,42 +692,3 @@ class TestClockSyncConfigurator:
             with patch("time.time", return_value=1700000000.0):
                 with pytest.raises(ValueError, match="too short"):
                     ClockSyncConfigurator._ntp_offset()
-
-
-# ----------------------------- system_checks() bridge tests -----------------------------
-
-
-class TestSystemChecks:
-    def test_returns_none_when_all_checks_pass(self) -> None:
-        with patch.dict(os.environ, {"CI": ""}, clear=False):
-            check_fn = system_checks(MockConfigurator(passes=True))
-            assert check_fn() is None
-
-    def test_returns_none_for_non_critical_declined(self) -> None:
-        """Non-critical check declined → configure_system returns normally → None."""
-        with patch.dict(os.environ, {"CI": ""}, clear=False):
-            with patch("builtins.input", return_value="n"):
-                check_fn = system_checks(MockConfigurator(passes=False, is_critical=False))
-                assert check_fn() is None
-
-    def test_returns_error_string_for_critical_declined(self) -> None:
-        """Critical check declined → SystemExit → error string."""
-        with patch.dict(os.environ, {"CI": ""}, clear=False):
-            with patch("builtins.input", return_value="n"):
-                check_fn = system_checks(MockConfigurator(passes=False, is_critical=True))
-                result = check_fn()
-                assert result is not None
-                assert "MockConfigurator" in result
-
-    def test_returns_none_after_successful_fix(self) -> None:
-        with patch.dict(os.environ, {"CI": ""}, clear=False):
-            with patch("builtins.input", return_value="y"):
-                mock = MockConfigurator(passes=False, is_critical=True)
-                check_fn = system_checks(mock)
-                assert check_fn() is None
-                assert mock.fix_called
-
-    def test_returns_none_in_ci(self) -> None:
-        with patch.dict(os.environ, {"CI": "true"}):
-            check_fn = system_checks(MockConfigurator(passes=False, is_critical=True))
-            assert check_fn() is None

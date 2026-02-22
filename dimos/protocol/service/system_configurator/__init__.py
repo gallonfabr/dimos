@@ -14,6 +14,8 @@
 
 """System configurator package — re-exports for backward compatibility."""
 
+import platform
+
 from dimos.protocol.service.system_configurator.base import (
     SystemConfigurator,
     _is_root_user,
@@ -21,7 +23,6 @@ from dimos.protocol.service.system_configurator.base import (
     _write_sysctl_int,
     configure_system,
     sudo_run,
-    system_checks,
 )
 from dimos.protocol.service.system_configurator.clock_sync import ClockSyncConfigurator
 from dimos.protocol.service.system_configurator.lcm import (
@@ -32,6 +33,24 @@ from dimos.protocol.service.system_configurator.lcm import (
     MulticastConfiguratorLinux,
     MulticastConfiguratorMacOS,
 )
+
+
+def lcm_configurators() -> list[SystemConfigurator]:
+    """Return the platform-appropriate LCM system configurators."""
+    system = platform.system()
+    if system == "Linux":
+        return [
+            MulticastConfiguratorLinux(loopback_interface="lo"),
+            BufferConfiguratorLinux(),
+        ]
+    elif system == "Darwin":
+        return [
+            MulticastConfiguratorMacOS(loopback_interface="lo0"),
+            BufferConfiguratorMacOS(),
+            MaxFileConfiguratorMacOS(),
+        ]
+    return []
+
 
 __all__ = [
     "IDEAL_RMEM_SIZE",
@@ -46,6 +65,6 @@ __all__ = [
     "_read_sysctl_int",
     "_write_sysctl_int",
     "configure_system",
+    "lcm_configurators",
     "sudo_run",
-    "system_checks",
 ]

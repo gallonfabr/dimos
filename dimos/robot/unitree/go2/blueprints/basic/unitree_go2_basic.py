@@ -22,7 +22,7 @@ from dimos.core.global_config import global_config
 from dimos.core.transport import pSHMTransport
 from dimos.msgs.sensor_msgs import Image
 from dimos.protocol.pubsub.impl.lcmpubsub import LCM
-from dimos.protocol.service.system_configurator import ClockSyncConfigurator, system_checks
+from dimos.protocol.service.system_configurator import ClockSyncConfigurator
 from dimos.robot.unitree.go2.connection import go2_connection
 from dimos.web.websocket_vis.websocket_vis_module import websocket_vis
 
@@ -102,7 +102,7 @@ unitree_go2_basic = (
     )
     .global_config(n_dask_workers=4, robot_model="unitree_go2")
     .requirements(
-        system_checks(ClockSyncConfigurator()),
+        ClockSyncConfigurator(),
     )
 )
 

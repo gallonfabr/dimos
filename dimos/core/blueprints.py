@@ -108,7 +108,7 @@ class Blueprint:
     remapping_map: Mapping[tuple[type[Module], str], str | type[Module] | type[Spec]] = field(
         default_factory=lambda: MappingProxyType({})
     )
-    requirement_checks: tuple[Callable[[], str | None], ...] = field(default_factory=tuple)
+    requirement_checks: tuple[Callable[[], str | None] | Any, ...] = field(default_factory=tuple)
 
     @classmethod
     def create(cls, module: type[Module], *args: Any, **kwargs: Any) -> "Blueprint":
@@ -148,7 +148,7 @@ class Blueprint:
             requirement_checks=self.requirement_checks,
         )
 
-    def requirements(self, *checks: Callable[[], str | None]) -> "Blueprint":
+    def requirements(self, *checks: "Callable[[], str | None] | SystemConfigurator") -> "Blueprint":
         return Blueprint(
             blueprints=self.blueprints,
             transport_map=self.transport_map,
@@ -203,16 +203,35 @@ class Blueprint:
         return sum(1 for n, _ in self._all_name_types if n == name) == 1
 
     def _check_requirements(self) -> None:
-        errors = []
-        red = "\033[31m"
-        reset = "\033[0m"
+        from dimos.protocol.service.system_configurator import (
+            SystemConfigurator,
+            configure_system,
+            lcm_configurators,
+        )
 
+        configurators = list(lcm_configurators())
+        other_checks: list[Callable[[], str | None]] = []
         for check in self.requirement_checks:
-            error = check()
-            if error:
-                errors.append(error)
+            if isinstance(check, SystemConfigurator):
+                configurators.append(check)
+            else:
+                other_checks.append(check)
 
+        if configurators:
+            try:
+                configure_system(configurators)
+            except SystemExit:
+                labels = [type(c).__name__ for c in configurators]
+                print(
+                    f"Required system configuration was declined: {', '.join(labels)}",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+
+        errors = [e for check in other_checks if (e := check())]
         if errors:
+            red = "\033[31m"
+            reset = "\033[0m"
             for error in errors:
                 print(f"{red}Error: {error}{reset}", file=sys.stderr)
             sys.exit(1)

@@ -18,10 +18,7 @@ from abc import ABC, abstractmethod
 from functools import cache
 import os
 import subprocess
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
+from typing import Any
 
 # ----------------------------- sudo helpers -----------------------------
 
@@ -137,25 +134,3 @@ def configure_system(checks: list[SystemConfigurator], check_only: bool = False)
             print(f"stderr: {error.stderr}")
 
     print("System configuration completed.")
-
-
-# ----------------------------- bridge: SystemConfigurator → Blueprint.requirements() -----------------------------
-
-
-def system_checks(*configurators: SystemConfigurator) -> Callable[[], str | None]:
-    """Wrap SystemConfigurator instances into a Blueprint.requirements()-compatible callable.
-
-    Returns a function that runs configure_system() and converts SystemExit
-    (raised when a critical check is declined) into an error string.
-    Non-critical declines return None (proceed with degraded state).
-    """
-
-    def _check() -> str | None:
-        try:
-            configure_system(list(configurators))
-        except SystemExit:
-            labels = [type(c).__name__ for c in configurators]
-            return f"Required system configuration was declined: {', '.join(labels)}"
-        return None
-
-    return _check
