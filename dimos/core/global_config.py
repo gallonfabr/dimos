@@ -17,7 +17,7 @@ from typing import Literal, TypeAlias
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from dimos.mapping.occupancy.path_map import NavigationStrategy
+from dimos.mapping.types import NavigationStrategy
 
 ViewerBackend: TypeAlias = Literal["rerun", "rerun-web", "foxglove", "none"]
 

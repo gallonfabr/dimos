@@ -14,7 +14,7 @@
 
 
 from dataclasses import dataclass
-from typing import TypeAlias
+from typing import Literal, TypeAlias
 
 
 @dataclass(frozen=True)
@@ -25,3 +25,4 @@ class LatLon:
 
 
 ImageCoord: TypeAlias = tuple[int, int]
+NavigationStrategy: TypeAlias = Literal["simple", "mixed"]
