@@ -23,7 +23,7 @@ name = "dimos"
 authors = [
     {name = "Dimensional Team", email = "build@dimensionalOS.com"},
 ]
-version = "0.0.10"
+version = "0.0.10.post1"
 description = "Powering agentive generalist robotics"
 requires-python = ">=3.10"
 readme = "README.md"
@@ -256,10 +256,6 @@ docker = [
 base = [
     "dimos[agents,web,perception,visualization,sim]",
 ]
-
-
-[tool.uv]
-constraint-dependencies = ["setuptools<82"]
 
 [tool.ruff]
 line-length = 100
