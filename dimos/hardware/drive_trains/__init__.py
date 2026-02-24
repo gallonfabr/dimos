@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2025-2026 Dimensional Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,17 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dimos.agents.mcp.mcp_client import mcp_client
-from dimos.agents.mcp.mcp_server import McpServer
-from dimos.core.blueprints import autoconnect
-from dimos.robot.unitree.go2.blueprints.agentic._common_agentic import _common_agentic
-from dimos.robot.unitree.go2.blueprints.smart.unitree_go2_spatial import unitree_go2_spatial
-
-unitree_go2_agentic_mcp = autoconnect(
-    unitree_go2_spatial,
-    McpServer.blueprint(),
-    mcp_client(),
-    _common_agentic,
-)
-
-__all__ = ["unitree_go2_agentic_mcp"]
+"""Drive train hardware adapters for velocity-commanded platforms."""

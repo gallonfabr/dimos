@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2025-2026 Dimensional Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,17 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dimos.agents.mcp.mcp_client import mcp_client
-from dimos.agents.mcp.mcp_server import McpServer
-from dimos.core.blueprints import autoconnect
-from dimos.robot.unitree.go2.blueprints.agentic._common_agentic import _common_agentic
-from dimos.robot.unitree.go2.blueprints.smart.unitree_go2_spatial import unitree_go2_spatial
+"""Mock twist base adapter for testing without hardware.
 
-unitree_go2_agentic_mcp = autoconnect(
-    unitree_go2_spatial,
-    McpServer.blueprint(),
-    mcp_client(),
-    _common_agentic,
-)
+Usage:
+    >>> from dimos.hardware.drive_trains.mock import MockTwistBaseAdapter
+    >>> adapter = MockTwistBaseAdapter(dof=3)
+    >>> adapter.connect()
+    True
+    >>> adapter.write_velocities([0.5, 0.0, 0.1])
+    True
+    >>> adapter.read_velocities()
+    [0.5, 0.0, 0.1]
+"""
 
-__all__ = ["unitree_go2_agentic_mcp"]
+from dimos.hardware.drive_trains.mock.adapter import MockTwistBaseAdapter
+
+__all__ = ["MockTwistBaseAdapter"]
