@@ -128,8 +128,8 @@ def show_config(ctx: typer.Context) -> None:
         typer.echo(f"{field_name}: {value}")
 
 
-@main.command()
-def list() -> None:
+@main.command(name="list")
+def list_blueprints() -> None:
     """List all available blueprints."""
     from dimos.robot.all_blueprints import all_blueprints
 
