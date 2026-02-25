@@ -464,7 +464,7 @@ class Module(ModuleBase[ModuleConfigT]):
                 inner, *_ = get_args(ann) or (Any,)
                 stream = In(inner, name, self)  # type: ignore[assignment]
                 setattr(self, name, stream)
-        super().__init__(global_config, **kwargs)
+        super().__init__(config_args=kwargs, global_config=global_config)
 
     def set_ref(self, ref) -> int:  # type: ignore[no-untyped-def]
         worker = get_worker()
