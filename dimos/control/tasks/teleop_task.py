@@ -82,7 +82,9 @@ class TeleopIKTaskConfig:
     ee_joint_id: int
     priority: int = 10
     timeout: float = 0.5
-    max_joint_delta_deg: float = 20.0  # loosened; tighten once IK null-space regularization is added
+    max_joint_delta_deg: float = (
+        20.0  # loosened; tighten once IK null-space regularization is added
+    )
     hand: str = ""
     gripper_joint: str | None = None
     gripper_open_pos: float = 0.85
@@ -368,9 +370,10 @@ class TeleopIKTask(BaseControlTask):
             return False
 
         clamped = max(0.0, min(1.0, value))
-        pos = self._config.gripper_open_pos + (
-            self._config.gripper_closed_pos - self._config.gripper_open_pos
-        ) * clamped
+        pos = (
+            self._config.gripper_open_pos
+            + (self._config.gripper_closed_pos - self._config.gripper_open_pos) * clamped
+        )
 
         with self._lock:
             self._gripper_target = pos

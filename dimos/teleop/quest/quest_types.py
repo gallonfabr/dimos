@@ -142,7 +142,11 @@ class Buttons(UInt32):
         """Pack analog trigger values [0.0, 1.0] into bits 16-23 and 24-31."""
         left_u8 = round(max(0.0, min(1.0, left)) * 255)
         right_u8 = round(max(0.0, min(1.0, right)) * 255)
-        unsigned = (self.data & 0x0000FFFF) | (left_u8 << self._LEFT_TRIGGER_SHIFT) | (right_u8 << self._RIGHT_TRIGGER_SHIFT)
+        unsigned = (
+            (self.data & 0x0000FFFF)
+            | (left_u8 << self._LEFT_TRIGGER_SHIFT)
+            | (right_u8 << self._RIGHT_TRIGGER_SHIFT)
+        )
         # LCM encodes UInt32 as signed int32 — convert to avoid overflow
         if unsigned >= 0x80000000:
             unsigned -= 0x100000000
