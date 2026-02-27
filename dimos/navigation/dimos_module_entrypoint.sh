@@ -24,6 +24,19 @@
 #   HARDWARE_MODE         Legacy: "true" → hardware mode. Prefer MODE instead.
 
 # NOTE: no set -e — individual step failures must not abort the whole entrypoint.
+echo '
+source /opt/ros/${ROS_DISTRO:-humble}/setup.bash
+source /ros2_ws/install/setup.bash
+source /opt/dimos-venv/bin/activate
+' > /usr/bin/upp
+chmod +x /usr/bin/upp
+echo '
+source /opt/ros/${ROS_DISTRO:-humble}/setup.bash
+source /ros2_ws/install/setup.bash
+source /opt/dimos-venv/bin/activate
+rosspy
+' > /usr/bin/upp
+chmod +x /usr/bin/rosspy
 
 # ── Git safe directories ──────────────────────────────────────────────────
 git config --global --add safe.directory /workspace/dimos 2>/dev/null || true

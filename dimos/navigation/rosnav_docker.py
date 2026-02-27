@@ -108,6 +108,8 @@ class ROSNavConfig(DockerModuleConfig):
     docker_entrypoint: str = "/usr/local/bin/dimos_module_entrypoint.sh"
     docker_file: Path = Path(__file__).parent.parent.parent / "docker" / "navigation" / "Dockerfile"
     docker_build_context: Path = Path(__file__).parent.parent.parent
+    # Use --runtime=nvidia (Jetson) instead of --gpus all (desktop); having both conflicts.
+    docker_gpus: str | None = None
     docker_extra_args: list = field(
         default_factory=lambda: ["--runtime=nvidia"] if shutil.which("nvcc") else []
     )
@@ -224,8 +226,13 @@ class ROSNav(
         self.goal_reached_sub = self._node.create_subscription(
             ROSBool, "/goal_reached", self._on_ros_goal_reached, 10
         )
+        from rclpy.qos import QoSProfile, ReliabilityPolicy  # type: ignore[attr-defined]
+
         self.cmd_vel_sub = self._node.create_subscription(
-            ROSTwistStamped, "/cmd_vel", self._on_ros_cmd_vel, 10
+            ROSTwistStamped,
+            "/cmd_vel",
+            self._on_ros_cmd_vel,
+            QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT),
         )
         self.goal_waypoint_sub = self._node.create_subscription(
             ROSPointStamped, "/way_point", self._on_ros_goal_waypoint, 10

@@ -2,6 +2,7 @@
 echo "Sourcing ROS environment..."
 source /opt/ros/${ROS_DISTRO:-humble}/setup.bash
 source /ros2_ws/install/setup.bash
+source /opt/dimos-venv/bin/activate
 
 cd /workspace/dimos/docker/navigation/ros-navigation-autonomy-stack
 
