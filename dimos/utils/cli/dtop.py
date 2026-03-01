@@ -154,6 +154,12 @@ class ResourceSpyApp(App[None]):
         height: 1fr;
         scrollbar-size: 0 0;
     }}
+    VerticalScroll.waiting {{
+        align: center middle;
+    }}
+    .waiting #panels {{
+        width: auto;
+    }}
     #panels {{
         background: transparent;
     }}
@@ -191,8 +197,17 @@ class ResourceSpyApp(App[None]):
             data = self._latest
             last_msg = self._last_msg_time
 
+        scroll = self.query_one(VerticalScroll)
         if data is None:
+            scroll.add_class("waiting")
+            waiting = Panel(
+                Text("dtop waiting for stats…", style=theme.FOREGROUND, justify="center"),
+                border_style=theme.CYAN,
+                expand=False,
+            )
+            self.query_one("#panels", Static).update(waiting)
             return
+        scroll.remove_class("waiting")
 
         stale = (time.monotonic() - last_msg) > 2.0
         dim = "#606060"
