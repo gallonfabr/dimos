@@ -25,6 +25,7 @@ import shutil
 import struct
 import threading
 import time
+from typing import Any
 
 import numpy as np
 
@@ -49,7 +50,7 @@ except ModuleNotFoundError:
     # Running outside a ROS2 environment (e.g. host CLI without ROS Python packages).
     # Define minimal placeholder types so blueprints can import without failing.
     class _Stub:  # pragma: no cover - host-only stub
-        def __init__(self, *args, **kwargs) -> None:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
     ROSPointStamped = _Stub  # type: ignore[assignment]
@@ -111,11 +112,11 @@ class ROSNavConfig(DockerModuleConfig):
     docker_build_context: Path = Path(__file__).parent.parent.parent
     # Use --runtime=nvidia (Jetson) instead of --gpus all (desktop); having both conflicts.
     docker_gpus: str | None = None
-    docker_extra_args: list = field(
+    docker_extra_args: list[str] = field(
         default_factory=lambda: ["--cap-add=NET_ADMIN"]
         + (["--runtime=nvidia"] if shutil.which("nvcc") else [])
     )
-    docker_env: dict = field(
+    docker_env: dict[str, str] = field(
         default_factory=lambda: {
             "ROS_DISTRO": "humble",
             "ROS_DOMAIN_ID": "42",
@@ -127,7 +128,7 @@ class ROSNavConfig(DockerModuleConfig):
             # "ROBOT_CONFIG_PATH": "unitree/unitree_g1",
         }
     )
-    docker_volumes: list = field(default_factory=lambda: [])
+    docker_volumes: list[tuple[str, str, str]] = field(default_factory=lambda: [])
 
     # --- Runtime mode settings ---
     # mode controls which ROS launch file the entrypoint selects:
@@ -160,7 +161,7 @@ class ROSNavConfig(DockerModuleConfig):
                 self.docker_volumes.append((str(bag_dir), container_bag_dir, "rw"))
                 self.docker_env["BAGFILE_PATH"] = f"{container_bag_dir}/{bag_name}"
             else:
-                self.docker_env["BAGFILE_PATH"] = self.bagfile_path
+                self.docker_env["BAGFILE_PATH"] = str(self.bagfile_path)
 
         self.docker_env["USE_RVIZ"] = "true" if self.use_rviz else "false"
 
@@ -612,7 +613,7 @@ ros_nav = ROSNav.blueprint
 
 
 def deploy(dimos: ModuleCoordinator):  # type: ignore[no-untyped-def]
-    nav = dimos.deploy(ROSNav)  # type: ignore[attr-defined]
+    nav = dimos.deploy(ROSNav)  # type: ignore[attr-defined, type-abstract]
 
     # Existing ports on LCM transports
     nav.pointcloud.transport = LCMTransport("/lidar", PointCloud2)
