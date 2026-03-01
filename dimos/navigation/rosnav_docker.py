@@ -125,6 +125,9 @@ class ROSNavConfig(DockerModuleConfig):
             "NVIDIA_VISIBLE_DEVICES": "all",
             "NVIDIA_DRIVER_CAPABILITIES": "all",
             "HARDWARE_MODE": "false",
+            # Give DDS topic discovery enough time after Unity registers publishers.
+            # Default in the entrypoint is 25s which is too short on some machines.
+            "UNITY_BRIDGE_CONNECT_TIMEOUT_SEC": "60",
         }
     )
     docker_volumes: list = field(default_factory=lambda: [])

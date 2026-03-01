@@ -165,8 +165,12 @@ unity_topics_ready() {
 }
 
 bridge_ready() {
+    # Check only that Unity has established the TCP connection to the bridge.
+    # unity_topics_ready (ros2 topic list) is intentionally skipped: DDS
+    # discovery is too slow/unreliable to use as a readiness gate inside the
+    # container — ros2 topic list consistently fails to see Unity bridge topics
+    # within any reasonable window even though the publishers ARE registered.
     has_established_bridge_tcp || return 1
-    unity_topics_ready || return 1
     return 0
 }
 
