@@ -173,7 +173,7 @@ $COMPOSE_CMD -f docker/navigation/docker-compose.yml build --build-arg TARGETARC
 echo ""
 echo -e "${GREEN}============================================${NC}"
 echo -e "${GREEN}Docker image built successfully!${NC}"
-echo -e "${GREEN}Image: dimos_autonomy_stack:${IMAGE_TAG}${NC}"
+echo -e "${GREEN}Image: dimos_autonomy_stack_v2:${IMAGE_TAG}${NC}"
 echo -e "${GREEN}SLAM: arise_slam + FASTLIO2 (both included)${NC}"
 echo -e "${GREEN}============================================${NC}"
 echo ""

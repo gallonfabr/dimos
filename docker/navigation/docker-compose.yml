@@ -7,8 +7,8 @@ services:
       network: host
       args:
         ROS_DISTRO: ${ROS_DISTRO:-humble}
-    image: dimos_autonomy_stack:${IMAGE_TAG:-humble}
-    container_name: dimos_simulation_container
+    image: dimos_autonomy_stack_v2:${IMAGE_TAG:-humble}
+    container_name: dimos_simulation_container_v2
     profiles: ["", "simulation"]  # Active by default (empty profile) AND with --profile simulation
 
     # Shared memory size for ROS 2 FastDDS
@@ -85,8 +85,8 @@ services:
       network: host
       args:
         ROS_DISTRO: ${ROS_DISTRO:-humble}
-    image: dimos_autonomy_stack:${IMAGE_TAG:-humble}
-    container_name: dimos_hardware_container
+    image: dimos_autonomy_stack_v2:${IMAGE_TAG:-humble}
+    container_name: dimos_hardware_container_v2
     profiles: ["hardware"]
 
     # Shared memory size for ROS 2 FastDDS
@@ -255,8 +255,8 @@ services:
       network: host
       args:
         ROS_DISTRO: ${ROS_DISTRO:-humble}
-    image: dimos_autonomy_stack:${IMAGE_TAG:-humble}
-    container_name: dimos_bagfile_container
+    image: dimos_autonomy_stack_v2:${IMAGE_TAG:-humble}
+    container_name: dimos_bagfile_container_v2
     profiles: ["bagfile"]
 
     # Shared memory size for ROS 2 FastDDS
