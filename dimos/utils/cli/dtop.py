@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.console import Group, RenderableType
 from rich.panel import Panel
@@ -35,6 +35,13 @@ from textual.widgets import Static
 
 from dimos.protocol.pubsub.impl.lcmpubsub import PickleLCM, Topic
 from dimos.utils.cli import theme
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+# ---------------------------------------------------------------------------
+# Color helpers
+# ---------------------------------------------------------------------------
 
 
 def _heat(ratio: float) -> str:
@@ -54,23 +61,81 @@ def _bar(value: float, max_val: float, width: int = 12) -> Text:
     return Text("█" * filled + "░" * (width - filled), style=_heat(ratio))
 
 
-def _fmt_bytes(val: int) -> Text:
-    mb = val / 1048576
+def _rel_style(value: float, lo: float, hi: float) -> str:
+    """Color a value by where it sits in the observed [lo, hi] range."""
+    if hi <= lo:
+        return _heat(0.0)
+    return _heat(min((value - lo) / (hi - lo), 1.0))
+
+
+# ---------------------------------------------------------------------------
+# Metric formatters (plain strings — color applied separately via _rel_style)
+# ---------------------------------------------------------------------------
+
+
+def _fmt_pct(v: float) -> str:
+    return f"{v:.0f}%"
+
+
+def _fmt_mem(v: float) -> str:
+    mb = v / 1048576
     if mb >= 1024:
-        return Text(f"{mb / 1024:.1f} GB", style=theme.BRIGHT_YELLOW)
-    return Text(f"{mb:.1f} MB", style=theme.WHITE)
+        return f"{mb / 1024:.1f} GB"
+    return f"{mb:.1f} MB"
 
 
-def _fmt_pct(val: float) -> Text:
-    return Text(f"{val:.0f}%", style=_heat(min(val / 100.0, 1.0)))
+def _fmt_int(v: float) -> str:
+    return str(int(v))
 
 
-def _fmt_time(seconds: float) -> Text:
-    if seconds >= 3600:
-        return Text(f"{seconds / 3600:.1f}h", style=theme.WHITE)
-    if seconds >= 60:
-        return Text(f"{seconds / 60:.1f}m", style=theme.WHITE)
-    return Text(f"{seconds:.1f}s", style=theme.WHITE)
+def _fmt_secs(v: float) -> str:
+    if v >= 3600:
+        return f"{v / 3600:.1f}h"
+    if v >= 60:
+        return f"{v / 60:.1f}m"
+    return f"{v:.1f}s"
+
+
+def _fmt_io(v: float) -> str:
+    return f"{v / 1048576:.0f} MB"
+
+
+# ---------------------------------------------------------------------------
+# Metric definitions — add a tuple here to add a new field
+# (label, dict_key, format_fn)
+# ---------------------------------------------------------------------------
+
+_LINE1: list[tuple[str, str, Callable[[float], str]]] = [
+    ("CPU", "cpu_percent", _fmt_pct),
+    ("PSS", "pss", _fmt_mem),
+    ("Thr", "num_threads", _fmt_int),
+    ("Child", "num_children", _fmt_int),
+    ("FDs", "num_fds", _fmt_int),
+]
+
+_LINE2: list[tuple[str, str, Callable[[float], str]]] = [
+    ("UserT", "cpu_time_user", _fmt_secs),
+    ("SysT", "cpu_time_system", _fmt_secs),
+    ("IOT", "cpu_time_iowait", _fmt_secs),
+    ("IO read", "io_read_bytes", _fmt_io),
+    ("IO write", "io_write_bytes", _fmt_io),
+]
+
+_ALL_KEYS = {key for _, key, _ in _LINE1 + _LINE2}
+
+
+def _compute_ranges(data_dicts: list[dict[str, Any]]) -> dict[str, tuple[float, float]]:
+    """(min, max) per metric across all processes (for relative coloring)."""
+    ranges: dict[str, tuple[float, float]] = {}
+    for key in _ALL_KEYS:
+        vals = [d.get(key, 0) for d in data_dicts]
+        ranges[key] = (min(vals), max(vals))
+    return ranges
+
+
+# ---------------------------------------------------------------------------
+# App
+# ---------------------------------------------------------------------------
 
 
 class ResourceSpyApp(App):  # type: ignore[type-arg]
@@ -145,16 +210,19 @@ class ResourceSpyApp(App):  # type: ignore[type-arg]
             modules = ", ".join(w.get("modules", [])) or ""
             entries.append((f"worker {wid}", role_style, w, modules))
 
+        # Per-metric max for relative coloring
+        ranges = _compute_ranges([d for _, _, d, _ in entries])
+
         # Build inner content: sections separated by Rules
         parts: list[RenderableType] = []
         for i, (role, rs, d, mods) in enumerate(entries):
             if i > 0:
-                # Titled divider between processes
                 title = Text(
-                    f" {role}: {mods} " if mods else f" {role} ", style=dim if stale else rs
+                    f" {role}: {mods} " if mods else f" {role} ",
+                    style=dim if stale else rs,
                 )
                 parts.append(Rule(title=title, style=border_style))
-            parts.extend(self._make_lines(d, stale))
+            parts.extend(self._make_lines(d, stale, ranges))
 
         # First entry title goes on the Panel itself
         first_role, first_rs, _, first_mods = entries[0]
@@ -171,48 +239,53 @@ class ResourceSpyApp(App):  # type: ignore[type-arg]
         self.query_one("#panels", Static).update(panel)
 
     @staticmethod
-    def _make_lines(d: dict[str, Any], stale: bool) -> list[Text]:
+    def _make_lines(
+        d: dict[str, Any],
+        stale: bool,
+        ranges: dict[str, tuple[float, float]],
+    ) -> list[Text]:
         dim = "#606060"
-        dim2 = "#505050"
+        label1_style = dim if stale else theme.WHITE
+        label2_style = dim if stale else theme.BRIGHT_GREEN
 
-        cpu = d.get("cpu_percent", 0)
-        pss_text = _fmt_bytes(d.get("pss", 0))
-        thr = d.get("num_threads", 0)
-        ch = d.get("num_children", 0)
-        fds = d.get("num_fds", 0)
-
-        # Line 1: CPU% + bar + PSS + Thr/Child/FDs
+        # Line 1
         line1 = Text()
-        line1.append("CPU ", style=dim if stale else theme.WHITE)
-        line1.append(f"{cpu:.0f}%", style=dim if stale else _heat(min(cpu / 100.0, 1.0)))
-        line1.append("  ")
-        if stale:
-            line1.append("░" * 12, style=dim)
-        else:
-            line1.append_text(_bar(cpu, 100))
-        line1.append("  PSS ", style=dim if stale else theme.WHITE)
-        line1.append(
-            pss_text.plain,
-            style=dim if stale else (pss_text.style or theme.WHITE),
-        )
-        line1.append(f"  Thr {thr}", style=dim if stale else theme.WHITE)
-        line1.append(f"  Child {ch}", style=dim if stale else theme.WHITE)
-        line1.append(f"  FDs {fds}", style=dim if stale else theme.WHITE)
+        for label, key, fmt in _LINE1:
+            val = d.get(key, 0)
+            lo, hi = ranges[key]
+            # CPU% uses absolute 0-100 scale; everything else is relative
+            if key == "cpu_percent":
+                val_style = dim if stale else _heat(min(val / 100.0, 1.0))
+            else:
+                val_style = dim if stale else _rel_style(val, lo, hi)
+            line1.append(f"{label} ", style=label1_style)
+            line1.append(fmt(val), style=val_style)
+            # CPU bar right after CPU%
+            if key == "cpu_percent":
+                line1.append(" ")
+                if stale:
+                    line1.append("░" * 12, style=dim)
+                else:
+                    line1.append_text(_bar(val, 100))
+            line1.append("  ")
 
-        # Line 2: CPU times + IO R/W
-        s2 = dim if stale else dim2
-        user_t = _fmt_time(d.get("cpu_time_user", 0)).plain
-        sys_t = _fmt_time(d.get("cpu_time_system", 0)).plain
-        iow_t = _fmt_time(d.get("cpu_time_iowait", 0)).plain
-        io_r = d.get("io_read_bytes", 0) / 1048576
-        io_w = d.get("io_write_bytes", 0) / 1048576
-
+        # Line 2
         line2 = Text()
-        line2.append(f"User {user_t}  Sys {sys_t}  IOw {iow_t}", style=s2)
-        line2.append(f"  IO R/W {io_r:.0f}/{io_w:.0f} MB", style=s2)
+        for i, (label, key, fmt) in enumerate(_LINE2):
+            val = d.get(key, 0)
+            lo, hi = ranges[key]
+            val_style = dim if stale else _rel_style(val, lo, hi)
+            line2.append(f"{label} ", style=label2_style)
+            line2.append(fmt(val), style=val_style)
+            if i < len(_LINE2) - 1:
+                line2.append("  ")
 
         return [line1, line2]
 
+
+# ---------------------------------------------------------------------------
+# Preview
+# ---------------------------------------------------------------------------
 
 _PREVIEW_DATA: dict[str, Any] = {
     "coordinator": {
@@ -279,12 +352,14 @@ def _preview() -> None:
         mods = ", ".join(w.get("modules", []))
         entries.append((f"worker {w['worker_id']}", rs, w, mods))
 
+    ranges = _compute_ranges([d for _, _, d, _ in entries])
+
     parts: list[RenderableType] = []
     for i, (role, rs, d, mods) in enumerate(entries):
         if i > 0:
             title = Text(f" {role}: {mods} " if mods else f" {role} ", style=rs)
             parts.append(Rule(title=title, style=border_style))
-        parts.extend(ResourceSpyApp._make_lines(d, stale=False))
+        parts.extend(ResourceSpyApp._make_lines(d, stale=False, ranges=ranges))
 
     first_role, first_rs, _, first_mods = entries[0]
     panel_title = Text(f" {first_role} ", style=first_rs)
