@@ -459,6 +459,38 @@ else
     mkdir -p "${SCRIPT_DIR}/bagfiles" "${SCRIPT_DIR}/config"
     docker rm -f dimos_simulation_container 2>/dev/null || true
 
+    echo -e "${GREEN}docker run command:${NC}"
+    echo "  docker run \\"
+    echo "    --name dimos_simulation_container \\"
+    echo "    --rm \\"
+    echo "    --shm-size=8g \\"
+    echo "    -it \\"
+    echo "    --network host \\"
+    echo "    --cap-add NET_ADMIN \\"
+    echo "    --runtime ${DOCKER_RUNTIME} \\"
+    echo "    -e DISPLAY=${DISPLAY} \\"
+    echo "    -e QT_X11_NO_MITSHM=1 \\"
+    echo "    -e NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all} \\"
+    echo "    -e NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all} \\"
+    echo "    -e ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42} \\"
+    echo "    -e ROBOT_CONFIG_PATH=${ROBOT_CONFIG_PATH:-mechanum_drive} \\"
+    echo "    -e ROBOT_IP=${ROBOT_IP:-} \\"
+    echo "    -e MODE=simulation \\"
+    echo "    -e USE_ROUTE_PLANNER=${USE_ROUTE_PLANNER:-true} \\"
+    echo "    -e USE_RVIZ=${USE_RVIZ:-false} \\"
+    echo "    -e HARDWARE_MODE=false \\"
+    echo "    -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp \\"
+    echo "    -e FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/config/fastdds.xml \\"
+    echo "    -e LOCALIZATION_METHOD=${LOCALIZATION_METHOD:-arise_slam} \\"
+    for v in "${XAUTH_ENV[@]}" "${SIM_VOLUMES[@]}" "${DRI_ARGS[@]}"; do
+        echo "    ${v} \\"
+    done
+    echo "    --device /dev/input:/dev/input \\"
+    echo "    -w /workspace/dimos \\"
+    echo "    dimos_autonomy_stack:${IMAGE_TAG} \\"
+    echo "    /usr/local/bin/dimos_module_entrypoint.sh"
+    echo ""
+
     docker run \
         --name dimos_simulation_container \
         --rm \

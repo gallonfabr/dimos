@@ -110,11 +110,9 @@ class ROSNavConfig(DockerModuleConfig):
     docker_entrypoint: str = "/usr/local/bin/dimos_module_entrypoint.sh"
     docker_file: Path = Path(__file__).parent.parent.parent / "docker" / "navigation" / "Dockerfile"
     docker_build_context: Path = Path(__file__).parent.parent.parent
-    # Use --runtime=nvidia (Jetson) instead of --gpus all (desktop); having both conflicts.
     docker_gpus: str | None = None
     docker_extra_args: list = field(
         default_factory=lambda: ["--cap-add=NET_ADMIN"]
-        + (["--runtime=nvidia"] if shutil.which("nvcc") else [])
     )
     docker_env: dict = field(
         default_factory=lambda: {
@@ -125,10 +123,16 @@ class ROSNavConfig(DockerModuleConfig):
             "QT_X11_NO_MITSHM": "1",
             "NVIDIA_VISIBLE_DEVICES": "all",
             "NVIDIA_DRIVER_CAPABILITIES": "all",
-            # "ROBOT_CONFIG_PATH": "unitree/unitree_g1",
+            "HARDWARE_MODE": "false",
         }
     )
     docker_volumes: list = field(default_factory=lambda: [])
+    docker_devices: list = field(
+        default_factory=lambda: [
+            "/dev/input:/dev/input",
+            *(["/dev/dri:/dev/dri"] if Path("/dev/dri").exists() else []),
+        ]
+    )
 
     # --- Runtime mode settings ---
     # mode controls which ROS launch file the entrypoint selects:
@@ -138,6 +142,10 @@ class ROSNavConfig(DockerModuleConfig):
     #   "bagfile"     — system_bagfile[_with_route_planner].launch.py + use_sim_time
     # Setting bagfile_path automatically forces mode to "bagfile".
     mode: str = "hardware"
+    use_route_planner: bool = False
+    localization_method: str = "arise_slam"
+    robot_config_path: str = "mechanum_drive"
+    robot_ip: str = ""
     bagfile_path: str | Path = ""  # host-side path to bag; remapped into container at runtime
 
     # use_rviz: whether to launch RViz2 inside the container.
@@ -164,6 +172,10 @@ class ROSNavConfig(DockerModuleConfig):
                 self.docker_env["BAGFILE_PATH"] = self.bagfile_path
 
         self.docker_env["USE_RVIZ"] = "true" if self.use_rviz else "false"
+        self.docker_env["USE_ROUTE_PLANNER"] = "true" if self.use_route_planner else "false"
+        self.docker_env["LOCALIZATION_METHOD"] = self.localization_method
+        self.docker_env["ROBOT_CONFIG_PATH"] = self.robot_config_path
+        self.docker_env["ROBOT_IP"] = self.robot_ip
 
         # Pass host DISPLAY through for X11 forwarding (RViz, Unity)
         if display := os.environ.get("DISPLAY", ":0"):
@@ -172,7 +184,7 @@ class ROSNavConfig(DockerModuleConfig):
         self.docker_env["QT_X11_NO_MITSHM"] = "1"
 
         repo_root = Path(__file__).parent.parent.parent
-        sim_data_dir = str(get_data("sims/cmu_unity_sim_x86"))
+        sim_data_dir = str(repo_root / "docker" / "navigation" / "unity_models")
         self.docker_volumes += [
             # X11 socket for display forwarding (RViz, Unity)
             ("/tmp/.X11-unix", "/tmp/.X11-unix", "rw"),

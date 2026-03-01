@@ -227,6 +227,7 @@ class DockerModule:
 
         cmd = self._build_docker_run_command()
         logger.info(f"Starting docker container: {self._container_name}")
+        logger.info("docker run command:\n  " + " \\\n  ".join(cmd))
         r = _run(cmd, timeout=DOCKER_RUN_TIMEOUT)
         if r.returncode != 0:
             raise RuntimeError(
