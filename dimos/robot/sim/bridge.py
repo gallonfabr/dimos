@@ -45,12 +45,7 @@ if TYPE_CHECKING:
 
 logger = setup_logger()
 
-
-def _find_cli_script() -> Path | None:
-    """Auto-detect DimSim/dimos-cli/cli.ts relative to this repo."""
-    repo_root = Path(__file__).resolve().parents[4]  # dimos/dimos/robot/sim -> repo
-    candidate = repo_root / "DimSim" / "dimos-cli" / "cli.ts"
-    return candidate if candidate.exists() else None
+_DIMSIM_JSR = "jsr:@antim/dimsim"
 
 
 def _find_deno() -> str:
@@ -69,10 +64,9 @@ class DimSimBridgeConfig(NativeModuleConfig):
 
     scene: str = "apt"
     port: int = 8090
-    cli_script: str | None = None
 
     # These fields are handled via extra_args, not to_cli_args().
-    cli_exclude: frozenset[str] = frozenset({"scene", "port", "cli_script"})
+    cli_exclude: frozenset[str] = frozenset({"scene", "port"})
 
     # Populated by _resolve_paths() — deno run args + dev subcommand + scene/port.
     extra_args: list[str] = field(default_factory=list)
@@ -101,49 +95,38 @@ class DimSimBridge(NativeModule, spec.Camera, spec.Pointcloud):
     cmd_vel: In[Twist]
 
     def _resolve_paths(self) -> None:
-        """Resolve executable and build extra_args.
-
-        Prefers globally installed ``dimsim`` CLI (from JSR).  Falls back to
-        running the local ``DimSim/dimos-cli/cli.ts`` via Deno for development.
-        """
-        dev_args = ["dev", "--scene", self.config.scene, "--port", str(self.config.port)]
-
-        # 1. Prefer globally installed dimsim CLI (deno install jsr:@antim/dimsim)
-        global_dimsim = shutil.which("dimsim")
-        if global_dimsim:
-            logger.info(f"Using global dimsim CLI: {global_dimsim}")
-            self.config.executable = global_dimsim
-            self.config.extra_args = dev_args
-            self.config.cwd = None
-            return
-
-        # 2. Fall back to local deno + cli.ts (development mode)
-        script = self.config.cli_script
-        if script and Path(script).exists():
-            cli_ts = str(Path(script).resolve())
-        else:
-            found = _find_cli_script()
-            if found:
-                cli_ts = str(found)
-            else:
-                raise FileNotFoundError(
-                    "Cannot find DimSim. Install globally with:\n"
-                    "  deno install -gAf --unstable-net jsr:@antim/dimsim\n"
-                    "  dimsim setup && dimsim scene install apt"
-                )
-
-        self.config.executable = _find_deno()
+        """Resolve executable and build extra_args."""
+        dimsim_path = shutil.which("dimsim") or str(Path.home() / ".deno" / "bin" / "dimsim")
+        self.config.executable = dimsim_path
         self.config.extra_args = [
-            "run",
-            "--allow-all",
-            "--unstable-net",
-            cli_ts,
-            *dev_args,
+            "dev", "--scene", self.config.scene, "--port", str(self.config.port),
         ]
         self.config.cwd = None
 
     def _maybe_build(self) -> None:
-        """No build step needed for DimSim bridge."""
+        """Ensure dimsim CLI, core assets, and scene are latest from S3."""
+        import subprocess
+
+        deno = _find_deno()
+        scene = self.config.scene
+
+        # Always install/update CLI — idempotent, pulls latest JSR version
+        logger.info("Ensuring dimsim CLI is up-to-date...")
+        subprocess.run(
+            [deno, "install", "-gAf", "--unstable-net", _DIMSIM_JSR],
+            check=True,
+        )
+
+        dimsim = shutil.which("dimsim")
+        if not dimsim:
+            raise FileNotFoundError("dimsim install failed — not found in PATH")
+
+        # Always re-download core assets + scene (pulls latest from S3)
+        logger.info("Downloading latest core assets...")
+        subprocess.run([dimsim, "setup"], check=True)
+
+        logger.info(f"Downloading latest scene: {scene}...")
+        subprocess.run([dimsim, "scene", "install", scene], check=True)
 
     def _collect_topics(self) -> dict[str, str]:
         """Bridge hardcodes LCM channel names — no topic args needed."""
