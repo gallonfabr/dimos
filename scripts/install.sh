@@ -207,17 +207,31 @@ prompt_spin() {
 # ─── ascii banner ─────────────────────────────────────────────────────────────
 show_banner() {
     if [[ "$NON_INTERACTIVE" == "1" ]] && [[ -z "${DIMOS_SHOW_BANNER:-}" ]]; then return; fi
-    local cols; cols=$(tput cols 2>/dev/null || echo 80)
-    if [[ $cols -lt 90 ]]; then
-        printf "\n  %s%sDimensionalOS Installer%s v%s\n\n" "$CYAN" "$BOLD" "$RESET" "$INSTALLER_VERSION"
-        return
-    fi
-    local banner='   ▇▇▇▇▇▇╗ ▇▇╗▇▇▇╗   ▇▇▇╗▇▇▇▇▇▇▇╗▇▇▇╗   ▇▇╗▇▇▇▇▇▇▇╗▇▇╗ ▇▇▇▇▇▇╗ ▇▇▇╗   ▇▇╗ ▇▇▇▇▇╗ ▇▇╗
+    # stty </dev/tty works when stdin is a pipe (curl | bash), tput needs a real stdin
+    local cols
+    cols=$(stty size </dev/tty 2>/dev/null | awk '{print $2}') \
+        || cols=$(tput cols 2>/dev/null) \
+        || cols=80
+
+    local banner
+    if [[ $cols -ge 90 ]]; then
+        banner='   ▇▇▇▇▇▇╗ ▇▇╗▇▇▇╗   ▇▇▇╗▇▇▇▇▇▇▇╗▇▇▇╗   ▇▇╗▇▇▇▇▇▇▇╗▇▇╗ ▇▇▇▇▇▇╗ ▇▇▇╗   ▇▇╗ ▇▇▇▇▇╗ ▇▇╗
    ▇▇╔══▇▇╗▇▇║▇▇▇▇╗ ▇▇▇▇║▇▇╔════╝▇▇▇▇╗  ▇▇║▇▇╔════╝▇▇║▇▇╔═══▇▇╗▇▇▇▇╗  ▇▇║▇▇╔══▇▇╗▇▇║
    ▇▇║  ▇▇║▇▇║▇▇╔▇▇▇▇╔▇▇║▇▇▇▇▇╗  ▇▇╔▇▇╗ ▇▇║▇▇▇▇▇▇▇╗▇▇║▇▇║   ▇▇║▇▇╔▇▇╗ ▇▇║▇▇▇▇▇▇▇║▇▇║
    ▇▇║  ▇▇║▇▇║▇▇║╚▇▇╔╝▇▇║▇▇╔══╝  ▇▇║╚▇▇╗▇▇║╚════▇▇║▇▇║▇▇║   ▇▇║▇▇║╚▇▇╗▇▇║▇▇╔══▇▇║▇▇║
    ▇▇▇▇▇▇╔╝▇▇║▇▇║ ╚═╝ ▇▇║▇▇▇▇▇▇▇╗▇▇║ ╚▇▇▇▇║▇▇▇▇▇▇▇║▇▇║╚▇▇▇▇▇▇╔╝▇▇║ ╚▇▇▇▇║▇▇║  ▇▇║▇▇▇▇▇▇▇╗
    ╚═════╝ ╚═╝╚═╝     ╚═╝╚══════╝╚═╝  ╚═══╝╚══════╝╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝'
+    elif [[ $cols -ge 45 ]]; then
+        banner='  ▇▇▇▇▇▇╗ ▇▇╗▇▇▇╗   ▇▇▇╗ ▇▇▇▇▇▇╗ ▇▇▇▇▇▇▇╗
+  ▇▇╔══▇▇╗▇▇║▇▇▇▇╗ ▇▇▇▇║▇▇╔═══▇▇╗▇▇╔════╝
+  ▇▇║  ▇▇║▇▇║▇▇╔▇▇▇▇╔▇▇║▇▇║   ▇▇║▇▇▇▇▇▇▇╗
+  ▇▇║  ▇▇║▇▇║▇▇║╚▇▇╔╝▇▇║▇▇║   ▇▇║╚════▇▇║
+  ▇▇▇▇▇▇╔╝▇▇║▇▇║ ╚═╝ ▇▇║╚▇▇▇▇▇▇╔╝▇▇▇▇▇▇▇║
+  ╚═════╝ ╚═╝╚═╝     ╚═╝ ╚═════╝ ╚══════╝'
+    else
+        printf "\n  %s%sDimOS Installer%s v%s\n\n" "$CYAN" "$BOLD" "$RESET" "$INSTALLER_VERSION"
+        return
+    fi
     if [[ -n "$GUM" ]]; then
         printf "\n"
         "$GUM" style --foreground 44 --bold "$banner"
