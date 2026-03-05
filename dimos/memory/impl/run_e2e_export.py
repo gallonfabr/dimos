@@ -113,7 +113,7 @@ for query_text in queries:
     slug = query_text.replace(" ", "_")[:30]
 
     # raw=True: get EmbeddingObservation with .similarity and .pose
-    raw_results = embeddings.search_embedding(query_text, k=50, raw=True).fetch()
+    raw_results = embeddings.search_embedding(query_text, k=200, raw=True).fetch()
 
     # Spatial heatmap → Rerun
     grid = similarity_heatmap(raw_results, resolution=0.5)

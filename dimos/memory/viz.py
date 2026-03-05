@@ -35,22 +35,30 @@ def similarity_heatmap(
     *,
     resolution: float = 0.1,
     padding: float = 1.0,
+    spread: float = 2.0,
     frame_id: str = "world",
 ) -> OccupancyGrid:
     """Build an OccupancyGrid heatmap from observations with similarity scores.
 
-    Each observation's pose maps to a grid cell; the cell value is
-    ``int(similarity * 100)`` (0-100 scale).  Unknown cells stay at -1.
+    Similarity values are normalized relative to the result set's min/max
+    (so the full 0-100 color range is used even when CLIP similarities
+    cluster in a narrow band).  Each dot's value spreads outward using
+    ``distance_transform_edt`` — the same technique as
+    :func:`dimos.mapping.occupancy.gradient.gradient` — fading to 0 at
+    *spread* metres.
 
     Args:
         observations: Iterable of Observation (must have .pose and .similarity).
         resolution: Grid resolution in metres/cell.
         padding: Extra metres around the bounding box.
+        spread: How far each dot's similarity radiates (metres).
         frame_id: Coordinate frame for the grid.
 
     Returns:
         OccupancyGrid publishable via LCMTransport.
     """
+    from scipy.ndimage import distance_transform_edt
+
     from dimos.memory.types import EmbeddingObservation
     from dimos.msgs.geometry_msgs.Pose import Pose
     from dimos.msgs.nav_msgs.OccupancyGrid import OccupancyGrid as OG
@@ -81,17 +89,43 @@ def similarity_heatmap(
     width = max(1, int((max_x - min_x) / resolution) + 1)
     height = max(1, int((max_y - min_y) / resolution) + 1)
 
-    grid = np.full((height, width), -1, dtype=np.int8)
+    # Normalize similarities to 0-1 (CLIP similarities cluster in a narrow band)
+    sims = np.array([s for _, _, s in posed])
+    sim_min, sim_max = float(sims.min()), float(sims.max())
+    sim_range = sim_max - sim_min
+    sims_norm = (sims - sim_min) / sim_range if sim_range > 0 else np.full_like(sims, 0.5)
 
-    for px, py, sim in posed:
-        gx = int((px - min_x) / resolution)
-        gy = int((py - min_y) / resolution)
-        gx = min(gx, width - 1)
-        gy = min(gy, height - 1)
-        val = int(sim * 100)
-        # Keep max similarity per cell
-        if grid[gy, gx] < val:
-            grid[gy, gx] = np.int8(val)
+    # Stamp normalized values onto a float grid (0 = no observation)
+    value_grid = np.zeros((height, width), dtype=np.float32)
+    has_obs = np.zeros((height, width), dtype=bool)
+
+    for (px, py, _), snorm in zip(posed, sims_norm, strict=False):
+        gx = min(int((px - min_x) / resolution), width - 1)
+        gy = min(int((py - min_y) / resolution), height - 1)
+        if snorm > value_grid[gy, gx]:
+            value_grid[gy, gx] = snorm
+        has_obs[gy, gx] = True
+
+    # Distance transform: distance (in cells) from each empty cell to nearest dot
+    dist_cells = distance_transform_edt(~has_obs)
+    dist_metres = dist_cells * resolution
+
+    # Fade factor: 1.0 at the dot, 0.0 at `spread` metres away
+    fade = np.clip(1.0 - dist_metres / spread, 0.0, 1.0)
+
+    # For each cell, find the value of its nearest dot (via index output)
+    _, nearest_idx = distance_transform_edt(~has_obs, return_indices=True)
+    nearest_value = value_grid[nearest_idx[0], nearest_idx[1]]
+
+    # Final heatmap = nearest dot's value * distance fade
+    heatmap = nearest_value * fade
+
+    # Convert to int8 grid: observed region is 0-100, rest is -1
+    grid = np.full((height, width), -1, dtype=np.int8)
+    active = heatmap > 0
+    grid[active] = (heatmap[active] * 100).clip(0, 100).astype(np.int8)
+    # Ensure dot cells themselves are always visible
+    grid[has_obs] = (value_grid[has_obs] * 100).clip(1, 100).astype(np.int8)
 
     origin = Pose(
         position=[min_x, min_y, 0.0],
