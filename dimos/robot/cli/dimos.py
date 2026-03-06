@@ -250,17 +250,18 @@ def stop(
 ) -> None:
     """Stop a running DimOS instance."""
 
-    from dimos.core.run_registry import get_most_recent, list_runs
+    from dimos.core.run_registry import RunEntry, get_most_recent, list_runs
 
     if all_instances:
         entries = list_runs(alive_only=True)
         if not entries:
             typer.echo("No running DimOS instances")
             return
-        for entry in entries:
-            _stop_entry(entry, force=force)
+        for e in entries:
+            _stop_entry(e, force=force)
         return
 
+    entry: RunEntry | None = None
     if pid:
         entries = list_runs(alive_only=True)
         entry = next((e for e in entries if e.pid == pid), None)
@@ -273,6 +274,7 @@ def stop(
             typer.echo("No running DimOS instances", err=True)
             raise typer.Exit(1)
 
+    assert entry is not None
     _stop_entry(entry, force=force)
 
 
