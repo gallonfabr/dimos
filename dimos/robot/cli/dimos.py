@@ -12,9 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import inspect
 import sys
-from typing import Any, get_args, get_origin
+from typing import TYPE_CHECKING, Any, get_args, get_origin
+
+if TYPE_CHECKING:
+    from dimos.core.run_registry import RunEntry
 
 from dotenv import load_dotenv
 import typer
@@ -250,7 +255,7 @@ def stop(
     _stop_entry(entry, force=force)
 
 
-def _stop_entry(entry: "RunEntry", force: bool = False) -> None:
+def _stop_entry(entry: RunEntry, force: bool = False) -> None:
     """Stop a single DimOS instance by registry entry."""
     from dimos.core.run_registry import stop_entry
 
