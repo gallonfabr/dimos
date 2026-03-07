@@ -16,10 +16,7 @@ from __future__ import annotations
 
 import inspect
 import sys
-from typing import TYPE_CHECKING, Any, get_args, get_origin
-
-if TYPE_CHECKING:
-    from dimos.core.run_registry import RunEntry
+from typing import Any, get_args, get_origin
 
 from dotenv import load_dotenv
 import typer
@@ -160,12 +157,11 @@ def run(
     if daemon:
         from dimos.core.daemon import (
             daemonize,
-            health_check,
             install_signal_handlers,
         )
 
         # Health check before daemonizing — catch early crashes
-        if not health_check(coordinator):
+        if not coordinator.health_check():
             typer.echo("Error: health check failed — a worker process died.", err=True)
             coordinator.stop()
             raise typer.Exit(1)
@@ -252,11 +248,6 @@ def stop(
         typer.echo("No running DimOS instance", err=True)
         raise typer.Exit(1)
 
-    _stop_entry(entry, force=force)
-
-
-def _stop_entry(entry: RunEntry, force: bool = False) -> None:
-    """Stop a single DimOS instance by registry entry."""
     from dimos.core.run_registry import stop_entry
 
     sig_name = "SIGKILL" if force else "SIGTERM"
