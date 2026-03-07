@@ -105,7 +105,7 @@ all_modules = {
     "detection3d-module": "dimos.perception.detection.module3D",
     "fastlio2-module": "dimos.hardware.sensors.lidar.fastlio2.module",
     "foxglove-bridge": "dimos.robot.foxglove_bridge",
-    "g1-connection": "dimos.robot.unitree.g1.connection",
+    "g1-connection": "dimos.robot.unitree.g1.legacy.connection",
     "g1-sim-connection": "dimos.robot.unitree.g1.sim",
     "g1-skills": "dimos.robot.unitree.g1.skill_container",
     "go2-connection": "dimos.robot.unitree.go2.connection",

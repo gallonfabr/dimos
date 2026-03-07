@@ -18,7 +18,7 @@ Prefer the dedicated high-level modules under
 :mod:`dimos.robot.unitree.g1.effectors.high_level` for new code:
 
 * :class:`G1HighLevelWebRtc` -- WebRTC transport
-* :class:`G1HighLevelSdk`    -- native Unitree SDK2 / DDS transport
+* :class:`G1HighLevelDdsSdk`    -- native Unitree SDK2 / DDS transport
 """
 
 from typing import Any
@@ -31,7 +31,7 @@ from dimos.msgs.geometry_msgs import Twist
 from dimos.robot.unitree.connection import UnitreeWebRTCConnection
 
 # Re-export the new high-level modules for discoverability.
-from dimos.robot.unitree.g1.effectors.high_level.dds_sdk import G1HighLevelSdk
+from dimos.robot.unitree.g1.effectors.high_level.dds_sdk import G1HighLevelDdsSdk
 from dimos.robot.unitree.g1.effectors.high_level.spec import HighLevelG1Spec
 from dimos.robot.unitree.g1.effectors.high_level.webrtc import G1HighLevelWebRtc
 from dimos.utils.logging_config import setup_logger
@@ -43,7 +43,7 @@ class G1Connection(Module):
     """Backward-compatible G1 connection that dispatches to WebRTC or SDK.
 
     New code should use :class:`G1HighLevelWebRtc` or
-    :class:`G1HighLevelSdk` directly.
+    :class:`G1HighLevelDdsSdk` directly.
     """
 
     cmd_vel: In[Twist]
@@ -123,7 +123,7 @@ g1_connection = G1Connection.blueprint
 
 __all__ = [
     "G1Connection",
-    "G1HighLevelSdk",
+    "G1HighLevelDdsSdk",
     "G1HighLevelWebRtc",
     "HighLevelG1Spec",
     "g1_connection",

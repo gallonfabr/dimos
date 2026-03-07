@@ -20,7 +20,7 @@ from dimos.navigation.rosnav import ros_nav
 from dimos.robot.unitree.g1.blueprints.primitive.unitree_g1_primitive_no_nav import (
     unitree_g1_primitive_no_nav,
 )
-from dimos.robot.unitree.g1.connection import g1_connection
+from dimos.robot.unitree.g1.legacy.connection import g1_connection
 
 unitree_g1_basic = autoconnect(
     unitree_g1_primitive_no_nav,
