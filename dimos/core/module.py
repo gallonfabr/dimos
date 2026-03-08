@@ -93,6 +93,12 @@ class ModuleBase(Configurable[ModuleConfigT], Resource):
 
     rpc_calls: list[str] = []
 
+    # Per-method RPC timeout overrides (seconds). Keys are method names.
+    # Used by RPCClient when calling methods on this module from the host.
+    # Example: rpc_timeouts = {"on_system_modules": 600.0}
+    # Methods not listed here use RPCClient.default_rpc_timeout (120s).
+    rpc_timeouts: dict[str, float] = {}
+
     default_config: type[ModuleConfigT] = ModuleConfig  # type: ignore[assignment]
 
     def __init__(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]

@@ -25,7 +25,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from dimos.core.module import ModuleConfig
-from dimos.core.rpc_client import ModuleProxyProtocol, RpcCall
+from dimos.core.rpc_client import ModuleProxyProtocol, RPCClient, RpcCall
 from dimos.protocol.rpc import LCMRPC
 from dimos.utils.logging_config import setup_logger
 from dimos.visualization.rerun.bridge import RERUN_GRPC_PORT, RERUN_WEB_PORT
@@ -102,6 +102,9 @@ class DockerModuleConfig(ModuleConfig):
     docker_pull_timeout: float = DOCKER_PULL_TIMEOUT_DEFAULT
     docker_startup_timeout: float = 120.0
     docker_poll_interval: float = 1.0
+    # Build timeout in seconds. None means no timeout (default: unlimited).
+    # Docker builds on Jetson (aarch64) can take 45+ minutes for heavy images.
+    docker_build_timeout: float | None = None
 
     # Reconnect to a running container instead of restarting it
     docker_reconnect_container: bool = False
@@ -196,6 +199,8 @@ class DockerModule(ModuleProxyProtocol):
         self._module_class = module_class
         self.config = config
         self._args = args
+        self._rpc_timeouts: dict[str, float] = dict(getattr(module_class, "rpc_timeouts", {}))
+        self._rpc_timeouts.setdefault("start", RPCClient.start_rpc_timeout)
         self._kwargs = kwargs
         self._running = False
         self.remote_name = module_class.__name__
@@ -239,7 +244,15 @@ class DockerModule(ModuleProxyProtocol):
                     logger.info(f"Reconnecting to running container: {self._container_name}")
                     reconnect = True
                 else:
-                    logger.info(f"Stopping existing container: {self._container_name}")
+                    logger.warning(
+                        f"\n"
+                        f"{'=' * 72}\n"
+                        f"WARNING: orphaned container discovered — '{self._container_name}'\n"
+                        f"A container from a previous run was not cleanly stopped (process may\n"
+                        f"have been force-killed). It will be stopped and removed now.\n"
+                        f"If you intended to reconnect to it, set docker_reconnect_container=True.\n"
+                        f"{'=' * 72}"
+                    )
                     _run(
                         [config.docker_bin, "stop", self._container_name],
                         timeout=DOCKER_STOP_TIMEOUT,
@@ -264,6 +277,9 @@ class DockerModule(ModuleProxyProtocol):
                 self._cleanup()
             raise
 
+    def _resolve_timeout(self, method: str) -> float:
+        return self._rpc_timeouts.get(method, RPCClient.default_rpc_timeout)
+
     def get_rpc_method_names(self) -> list[str]:
         return self.rpc_calls
 
@@ -272,7 +288,11 @@ class DockerModule(ModuleProxyProtocol):
         self._bound_rpc_calls[method] = callable
         # Forward to container — Module.set_rpc_method unpickles the RpcCall
         # and wires it with the container's own LCMRPC
-        self.rpc.call_sync(f"{self.remote_name}/set_rpc_method", ([method, callable], {}))
+        self.rpc.call_sync(
+            f"{self.remote_name}/set_rpc_method",
+            ([method, callable], {}),
+            rpc_timeout=self._resolve_timeout("set_rpc_method"),
+        )
 
     def get_rpc_calls(self, *methods: str) -> RpcCall | tuple[RpcCall, ...]:
         missing = set(methods) - self._bound_rpc_calls.keys()
@@ -284,7 +304,9 @@ class DockerModule(ModuleProxyProtocol):
     def start(self) -> None:
         """Invoke the remote module's start() RPC."""
         try:
-            self.rpc.call_sync(f"{self.remote_name}/start", ([], {}))
+            self.rpc.call_sync(
+                f"{self.remote_name}/start", ([], {}), rpc_timeout=self._resolve_timeout("start")
+            )
         except Exception:
             with suppress(Exception):
                 self.stop()
@@ -333,7 +355,9 @@ class DockerModule(ModuleProxyProtocol):
     def set_transport(self, stream_name: str, transport: Any) -> bool:
         """Forward to the container's Module.set_transport RPC."""
         result, _ = self.rpc.call_sync(
-            f"{self.remote_name}/set_transport", ([stream_name, transport], {})
+            f"{self.remote_name}/set_transport",
+            ([stream_name, transport], {}),
+            rpc_timeout=self._resolve_timeout("set_transport"),
         )
         return bool(result)
 
@@ -341,7 +365,15 @@ class DockerModule(ModuleProxyProtocol):
         rpcs = self.__dict__.get("rpcs")
         if rpcs is not None and name in rpcs:
             original_method = getattr(self._module_class, name, None)
-            return RpcCall(original_method, self.rpc, name, self.remote_name, self._unsub_fns, None)
+            return RpcCall(
+                original_method,
+                self.rpc,
+                name,
+                self.remote_name,
+                self._unsub_fns,
+                None,
+                timeout=self._resolve_timeout(name),
+            )
         raise AttributeError(f"{name} not found on {type(self).__name__}")
 
     # Docker command building (split into focused helpers for readability)
