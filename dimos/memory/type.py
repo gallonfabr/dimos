@@ -26,7 +26,7 @@ from dimos.models.embedding.base import Embedding
 if TYPE_CHECKING:
     from dimos.msgs.geometry_msgs.PoseStamped import PoseStamped
 
-PoseProvider: TypeAlias = Callable[[], Any]  # () -> PoseLike | None
+PoseProvider: TypeAlias = Callable[[float], Any]  # (ts) -> PoseLike | None
 
 T = TypeVar("T")
 
@@ -43,7 +43,7 @@ _UNSET = _Unset()
 @dataclass
 class Observation(Generic[T]):
     id: int
-    ts: float | None = None
+    ts: float
     pose: PoseStamped | None = None
     tags: dict[str, Any] = field(default_factory=dict)
     parent_id: int | None = field(default=None, repr=False)

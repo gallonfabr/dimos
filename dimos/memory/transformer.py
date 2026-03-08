@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from dimos.models.embedding.base import Embedding, EmbeddingModel
-    from dimos.models.vl.base import Captioner
+    from dimos.models.vl.base import Captioner, VlModel
 
     from .stream import Stream
     from .type import Observation
@@ -247,3 +247,53 @@ class EmbeddingTransformer(Transformer[Any, "Embedding"]):
         if isinstance(emb, list):
             emb = emb[0]
         target.append(emb, ts=obs.ts, pose=obs.pose, tags=obs.tags, parent_id=obs.id)
+
+
+class VLMDetectionTransformer(Transformer[Any, "Detection2DBBox"]):
+    """Wraps a VlModel to produce Detection2DBBox from images.
+
+    Calls query_detections() per image, emitting one Detection2DBBox(image=None)
+    per bounding box with parent_id linking to the source image observation.
+    """
+
+    supports_backfill: bool = True
+    supports_live: bool = True
+
+    def __init__(self, model: VlModel, query: str) -> None:
+        from dimos.perception.detection.type.detection2d.bbox import Detection2DBBox
+
+        self.model = model
+        self._query = query
+        self.output_type: type | None = Detection2DBBox
+
+    def process(self, source: Stream[Any], target: Stream[Detection2DBBox]) -> None:
+        for page in source.fetch_pages():
+            for obs in page:
+                self._detect(obs, target)
+
+    def on_append(self, obs: Observation[Any], target: Stream[Detection2DBBox]) -> None:
+        self._detect(obs, target)
+
+    def _detect(self, obs: Observation[Any], target: Stream[Detection2DBBox]) -> None:
+        from dimos.perception.detection.type.detection2d.bbox import Detection2DBBox
+
+        try:
+            result = self.model.query_detections(obs.data, self._query)
+        except Exception:
+            return
+        for det in result.detections:
+            target.append(
+                Detection2DBBox(
+                    bbox=det.bbox,
+                    track_id=det.track_id,
+                    class_id=det.class_id,
+                    confidence=det.confidence,
+                    name=det.name,
+                    ts=obs.ts or det.ts,
+                    image=None,
+                ),
+                ts=obs.ts,
+                pose=obs.pose,
+                tags={**(obs.tags or {}), "query": self._query},
+                parent_id=obs.id,
+            )

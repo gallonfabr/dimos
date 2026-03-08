@@ -55,7 +55,7 @@ class MemoryModule(Module[MemoryModuleConfig]):
         super().__init__(*args, **kwargs)
         self._store: SqliteStore | None = None
 
-    def pose(self) -> PoseStamped | None:
+    def pose(self, ts: float) -> PoseStamped | None:
         return self.tf.get_pose(self.config.world_frame, self.config.robot_frame)  # type: ignore[no-any-return]
 
     @rpc

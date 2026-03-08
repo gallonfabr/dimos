@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import copy
+import time
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -540,7 +541,7 @@ class TransformStream(Stream[R]):
         live: bool = False,
         backfill_only: bool = False,
     ) -> None:
-        super().__init__(backend=None)
+        super().__init__(backend=None, session=source._session)
         self._source = source
         self._transformer = transformer
         self._live = live
@@ -629,7 +630,7 @@ class _CollectorStream(Stream[R]):
     ) -> Observation[R]:
         obs: Observation[R] = Observation(
             id=self._next_id,
-            ts=ts,
+            ts=ts if ts is not None else time.time(),
             tags=tags or {},
             parent_id=parent_id,
             _data=payload,

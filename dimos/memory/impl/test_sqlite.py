@@ -958,29 +958,31 @@ class TestMatchesFilters:
         from dimos.memory.type import TagsFilter
 
         f = TagsFilter((("cam", "front"),))
-        assert f.matches(Observation(id=1, tags={"cam": "front", "quality": "high"})) is True
-        assert f.matches(Observation(id=2, tags={"cam": "rear"})) is False
-        assert f.matches(Observation(id=3, tags={})) is False
+        assert (
+            f.matches(Observation(id=1, ts=0.0, tags={"cam": "front", "quality": "high"})) is True
+        )
+        assert f.matches(Observation(id=2, ts=0.0, tags={"cam": "rear"})) is False
+        assert f.matches(Observation(id=3, ts=0.0, tags={})) is False
 
     def test_text_search_filter(self) -> None:
         from dimos.memory.type import TextSearchFilter
 
         f = TextSearchFilter("motor", k=None)
-        assert f.matches(Observation(id=1, _data="Motor fault on joint 3")) is True
-        assert f.matches(Observation(id=2, _data="Battery low")) is False
+        assert f.matches(Observation(id=1, ts=0.0, _data="Motor fault on joint 3")) is True
+        assert f.matches(Observation(id=2, ts=0.0, _data="Battery low")) is False
 
     def test_embedding_search_filter_always_true(self) -> None:
         from dimos.memory.type import EmbeddingSearchFilter
 
         f = EmbeddingSearchFilter([1.0, 0.0], k=5)
-        assert f.matches(Observation(id=1)) is True
+        assert f.matches(Observation(id=1, ts=0.0)) is True
 
     def test_lineage_filter_raises(self) -> None:
         from dimos.memory.type import LineageFilter, StreamQuery
 
         f = LineageFilter("src", StreamQuery(), ())
         with pytest.raises(NotImplementedError):
-            f.matches(Observation(id=1))
+            f.matches(Observation(id=1, ts=0.0))
 
 
 class TestFilteredAppended:
