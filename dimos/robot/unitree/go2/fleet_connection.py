@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from dimos.core.core import rpc
@@ -26,11 +25,12 @@ from dimos.robot.unitree.go2.connection import (
     Go2ConnectionProtocol,
     make_connection,
 )
+from dimos.utils.logging_config import setup_logger
 
 if TYPE_CHECKING:
     from dimos.msgs.geometry_msgs import Twist
 
-logger = logging.getLogger(__name__)
+logger = setup_logger()
 
 
 class Go2FleetConnection(GO2Connection):
@@ -61,7 +61,6 @@ class Go2FleetConnection(GO2Connection):
     def start(self) -> None:
         self._extra_connections.clear()
         for ip in self._extra_ips:
-            logger.info(f"Connecting to fleet Go2 at {ip}...")
             conn = make_connection(ip, self._global_config)
             conn.start()
             self._extra_connections.append(conn)
@@ -91,28 +90,38 @@ class Go2FleetConnection(GO2Connection):
     def _all_connections(self) -> list[Go2ConnectionProtocol]:
         return [self.connection, *self._extra_connections]
 
-    def _broadcast(self, method: str, *args: object, **kwargs: object) -> list[bool]:
-        """Call a method on all connections, isolating errors per robot."""
+    @rpc
+    def move(self, twist: Twist, duration: float = 0.0) -> bool:
         results: list[bool] = []
         for conn in self._all_connections:
             try:
-                results.append(getattr(conn, method)(*args, **kwargs))
+                results.append(conn.move(twist, duration))
             except Exception as e:
-                logger.error(f"Fleet {method} failed: {e}")
+                logger.error(f"Fleet move failed: {e}")
                 results.append(False)
-        return results
-
-    @rpc
-    def move(self, twist: Twist, duration: float = 0.0) -> bool:
-        return all(self._broadcast("move", twist, duration))
+        return all(results)
 
     @rpc
     def standup(self) -> bool:
-        return all(self._broadcast("standup"))
+        results: list[bool] = []
+        for conn in self._all_connections:
+            try:
+                results.append(conn.standup())
+            except Exception as e:
+                logger.error(f"Fleet standup failed: {e}")
+                results.append(False)
+        return all(results)
 
     @rpc
     def liedown(self) -> bool:
-        return all(self._broadcast("liedown"))
+        results: list[bool] = []
+        for conn in self._all_connections:
+            try:
+                results.append(conn.liedown())
+            except Exception as e:
+                logger.error(f"Fleet liedown failed: {e}")
+                results.append(False)
+        return all(results)
 
     @rpc
     def publish_request(self, topic: str, data: dict[str, Any]) -> dict[Any, Any]:
