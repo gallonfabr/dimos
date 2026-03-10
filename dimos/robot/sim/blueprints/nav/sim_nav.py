@@ -16,6 +16,9 @@
 
 from dimos.core.blueprints import autoconnect
 from dimos.mapping.costmapper import cost_mapper
+from dimos.mapping.pointclouds.occupancy import (
+    HeightCostConfig,
+)
 from dimos.mapping.voxels import voxel_mapper
 from dimos.navigation.frontier_exploration import wavefront_frontier_explorer
 from dimos.navigation.replanning_a_star.module import replanning_a_star_planner
@@ -23,8 +26,8 @@ from dimos.robot.sim.blueprints.basic.sim_basic import sim_basic
 
 sim_nav = autoconnect(
     sim_basic,
-    voxel_mapper(voxel_size=0.1),
-    cost_mapper(),
+    voxel_mapper(voxel_size=0.1, publish_interval=0.5),
+    cost_mapper(algo="height_cost", config=HeightCostConfig(can_pass_under=1.5, smoothing=2.0)),
     replanning_a_star_planner(),
     wavefront_frontier_explorer(),
 ).global_config(n_workers=6, robot_model="dimsim")
