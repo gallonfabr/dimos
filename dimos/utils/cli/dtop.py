@@ -200,7 +200,7 @@ class ResourceSpyApp(App[None]):
         self._topic_name = topic_name
         # start LCM before .run() takes over the terminal (raw mode),
         # because autoconf uses typer.confirm() which deadlocks inside a TUI.
-        self._lcm = PickleLCM(autoconf=True)
+        self._lcm = PickleLCM()
         self._lcm.subscribe(Topic(self._topic_name), self._on_msg)
         self._lcm.start()
         self._lock = threading.Lock()

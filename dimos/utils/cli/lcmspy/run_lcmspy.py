@@ -82,7 +82,7 @@ class LCMSpyApp(App):  # type: ignore[type-arg]
         super().__init__(*args, **kwargs)
         # start LCM before .run() takes over the terminal (raw mode),
         # because autoconf uses typer.confirm() which deadlocks inside a TUI.
-        self.spy = GraphLCMSpy(autoconf=True, graph_log_window=0.5)
+        self.spy = GraphLCMSpy(graph_log_window=0.5)
         self.spy.start()
         self.table: DataTable | None = None  # type: ignore[type-arg]
 

@@ -68,7 +68,7 @@ def topic_echo(topic: str, type_name: str | None) -> None:
         return
 
     # Inferred typed mode: listen on /topic#pkg.Msg and decode from the msg_name suffix.
-    bus = LCMPubSubBase(autoconf=True)
+    bus = LCMPubSubBase()
     bus.start()  # starts threaded handle loop
 
     typed_pattern = rf"^{re.escape(topic)}#.*"

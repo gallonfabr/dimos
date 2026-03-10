@@ -49,7 +49,6 @@ def autoconf(check_only: bool = False) -> None:
 class LCMConfig:
     ttl: int = 0
     url: str | None = None
-    autoconf: bool = True
     lcm: lcm.LCM | None = None
 
     def __post_init__(self) -> None:
