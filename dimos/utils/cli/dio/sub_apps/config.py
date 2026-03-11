@@ -309,10 +309,15 @@ class ConfigSubApp(SubApp):
             _save_config(self.config_values)
             self._mark_dirty()
 
+    # Keys that are dio-only settings and should NOT be passed as CLI args
+    _DIO_ONLY_KEYS = {"theme"}
+
     def get_overrides(self) -> dict[str, object]:
-        """Return config overrides for use by the runner."""
+        """Return config overrides for use by the runner (excludes dio-only settings)."""
         overrides: dict[str, object] = {}
         for k, v in self.config_values.items():
+            if k in self._DIO_ONLY_KEYS:
+                continue
             if k == "robot_ip" and not v:
                 continue
             overrides[k] = v
