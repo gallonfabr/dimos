@@ -64,7 +64,7 @@ class StatusSubApp(SubApp):
     StatusSubApp .subapp-header {
         width: 100%;
         height: auto;
-        color: #ff8800;
+        color: $dui-header;
         padding: 1 2;
         text-style: bold;
     }
