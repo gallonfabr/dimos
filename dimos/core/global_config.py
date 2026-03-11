@@ -18,6 +18,7 @@ from typing import Literal, TypeAlias
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from dimos.mapping.occupancy.path_map import NavigationStrategy
+from dimos.models.vl.create import VlModelName
 
 ViewerBackend: TypeAlias = Literal["rerun", "rerun-web", "rerun-connect", "foxglove", "none"]
 
@@ -31,6 +32,8 @@ class GlobalConfig(BaseSettings):
     robot_ips: str | None = None
     simulation: bool = False
     replay: bool = False
+    replay_dir: str = "go2_sf_office"
+    new_memory: bool = False
     viewer: ViewerBackend = "rerun"
     n_workers: int = 2
     memory_limit: str = "auto"
@@ -50,6 +53,7 @@ class GlobalConfig(BaseSettings):
     mcp_host: str = "0.0.0.0"
     dtop: bool = False
     obstacle_avoidance: bool = True
+    detection_model: VlModelName = "moondream"
 
     model_config = SettingsConfigDict(
         env_file=".env",
