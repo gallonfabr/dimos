@@ -29,8 +29,10 @@ from dimos.memory2.filter import (
     AfterFilter,
     AtFilter,
     BeforeFilter,
+    NearFilter,
     TagsFilter,
     TimeRangeFilter,
+    _xyz,
 )
 from dimos.memory2.livechannel.subject import SubjectChannel
 from dimos.memory2.store import Session, Store, StoreConfig
@@ -91,24 +93,66 @@ def _reconstruct_pose(
     return (x, y or 0.0, z or 0.0, qx or 0.0, qy or 0.0, qz or 0.0, qw or 1.0)
 
 
-def _compile_filter(f: Filter) -> tuple[str, list[Any]] | None:
-    """Compile a filter to SQL WHERE clause. Returns None for non-pushable filters."""
+def _compile_filter(f: Filter, stream: str, prefix: str = "") -> tuple[str, list[Any]] | None:
+    """Compile a filter to SQL WHERE clause. Returns None for non-pushable filters.
+
+    ``stream`` is the raw stream name (for R*Tree table references).
+    ``prefix`` is a column qualifier (e.g. ``"meta."`` for JOIN queries).
+    """
     if isinstance(f, AfterFilter):
-        return ("ts > ?", [f.t])
+        return (f"{prefix}ts > ?", [f.t])
     if isinstance(f, BeforeFilter):
-        return ("ts < ?", [f.t])
+        return (f"{prefix}ts < ?", [f.t])
     if isinstance(f, TimeRangeFilter):
-        return ("ts >= ? AND ts <= ?", [f.t1, f.t2])
+        return (f"{prefix}ts >= ? AND {prefix}ts <= ?", [f.t1, f.t2])
     if isinstance(f, AtFilter):
-        return ("ABS(ts - ?) <= ?", [f.t, f.tolerance])
+        return (f"ABS({prefix}ts - ?) <= ?", [f.t, f.tolerance])
     if isinstance(f, TagsFilter):
         clauses = []
         params: list[Any] = []
         for k, v in f.tags.items():
-            clauses.append(f"json_extract(tags, '$.{k}') = ?")
+            clauses.append(f"json_extract({prefix}tags, '$.{k}') = ?")
             params.append(v)
         return (" AND ".join(clauses), params)
-    # NearFilter, PredicateFilter — not pushable
+    if isinstance(f, NearFilter):
+        pose = f.pose
+        if pose is None:
+            return None
+        if hasattr(pose, "position"):
+            pose = pose.position
+        cx, cy, cz = _xyz(pose)
+        r = f.radius
+        # R*Tree bounding-box pre-filter + exact squared-distance check
+        rtree_sql = (
+            f'{prefix}id IN (SELECT id FROM "{stream}_rtree" '
+            f"WHERE x_min >= ? AND x_max <= ? "
+            f"AND y_min >= ? AND y_max <= ? "
+            f"AND z_min >= ? AND z_max <= ?)"
+        )
+        dist_sql = (
+            f"(({prefix}pose_x - ?) * ({prefix}pose_x - ?) + "
+            f"({prefix}pose_y - ?) * ({prefix}pose_y - ?) + "
+            f"({prefix}pose_z - ?) * ({prefix}pose_z - ?) <= ?)"
+        )
+        return (
+            f"{rtree_sql} AND {dist_sql}",
+            [
+                cx - r,
+                cx + r,
+                cy - r,
+                cy + r,
+                cz - r,
+                cz + r,  # R*Tree bbox
+                cx,
+                cx,
+                cy,
+                cy,
+                cz,
+                cz,
+                r * r,  # squared distance
+            ],
+        )
+    # PredicateFilter — not pushable
     return None
 
 
@@ -123,6 +167,7 @@ def _compile_query(
     Returns (sql, params, python_filters) where python_filters must be
     applied as post-filters in Python.
     """
+    prefix = "meta." if join_blob else ""
     if join_blob:
         select = f'SELECT meta.id, meta.ts, meta.pose_x, meta.pose_y, meta.pose_z, meta.pose_qx, meta.pose_qy, meta.pose_qz, meta.pose_qw, json(meta.tags), blob.data FROM "{table}" AS meta JOIN "{table}_blob" AS blob ON blob.id = meta.id'
     else:
@@ -133,12 +178,9 @@ def _compile_query(
     python_filters: list[Filter] = []
 
     for f in query.filters:
-        compiled = _compile_filter(f)
+        compiled = _compile_filter(f, table, prefix)
         if compiled is not None:
             sql_part, sql_params = compiled
-            if join_blob:
-                # Qualify column references for JOIN
-                sql_part = sql_part.replace("ts ", "meta.ts ").replace("tags", "meta.tags")
             where_parts.append(sql_part)
             params.extend(sql_params)
         else:
@@ -150,12 +192,10 @@ def _compile_query(
 
     # ORDER BY
     if query.order_field:
-        col = "meta." + query.order_field if join_blob else query.order_field
         direction = "DESC" if query.order_desc else "ASC"
-        sql += f" ORDER BY {col} {direction}"
+        sql += f" ORDER BY {prefix}{query.order_field} {direction}"
     else:
-        col = "meta.id" if join_blob else "id"
-        sql += f" ORDER BY {col} ASC"
+        sql += f" ORDER BY {prefix}id ASC"
 
     # Only push LIMIT/OFFSET to SQL when there are no Python post-filters
     if not python_filters and not query.search_text:
@@ -180,7 +220,7 @@ def _compile_count(
     python_filters: list[Filter] = []
 
     for f in query.filters:
-        compiled = _compile_filter(f)
+        compiled = _compile_filter(f, table)
         if compiled is not None:
             sql_part, sql_params = compiled
             where_parts.append(sql_part)
@@ -286,6 +326,14 @@ class SqliteBackend(Configurable[BackendConfig], Generic[T]):
             bs = self.config.blob_store
             assert bs is not None
             bs.put(self._name, row_id, encoded)
+
+            # R*Tree spatial index
+            if pose:
+                self._conn.execute(
+                    f'INSERT INTO "{self._name}_rtree" (id, x_min, x_max, y_min, y_max, z_min, z_max) '
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (row_id, px, px, py, py, pz, pz),
+                )
 
             vs = self.config.vector_store
             if vs is not None:
@@ -535,6 +583,15 @@ class SqliteSession(Session):
             "    tags    BLOB    DEFAULT (jsonb('{}'))"
             ")"
         )
+        # R*Tree spatial index for pose queries
+        self._conn.execute(
+            f'CREATE VIRTUAL TABLE IF NOT EXISTS "{name}_rtree" USING rtree('
+            "    id,"
+            "    x_min, x_max,"
+            "    y_min, y_max,"
+            "    z_min, z_max"
+            ")"
+        )
         self._conn.commit()
 
         # Merge shared stores as defaults
@@ -555,6 +612,7 @@ class SqliteSession(Session):
         self._conn.execute(f'DROP TABLE IF EXISTS "{name}"')
         self._conn.execute(f'DROP TABLE IF EXISTS "{name}_blob"')
         self._conn.execute(f'DROP TABLE IF EXISTS "{name}_vec"')
+        self._conn.execute(f'DROP TABLE IF EXISTS "{name}_rtree"')
         self._conn.execute("DELETE FROM _streams WHERE name = ?", (name,))
         self._conn.commit()
 
