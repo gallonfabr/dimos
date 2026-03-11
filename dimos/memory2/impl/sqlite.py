@@ -318,8 +318,9 @@ class SqliteBackend(Configurable[BackendConfig], Generic[T]):
         join = self._join_blobs
         sql, params, python_filters = _compile_query(query, self._name, join_blob=join)
 
-        rows = self._conn.execute(sql, params).fetchall()
-        it: Iterator[Observation[T]] = (self._row_to_obs(r, has_blob=join) for r in rows)
+        cur = self._conn.execute(sql, params)
+        cur.arraysize = self.config.page_size
+        it: Iterator[Observation[T]] = (self._row_to_obs(r, has_blob=join) for r in cur)
 
         # Text search — requires loading data
         if query.search_text is not None:

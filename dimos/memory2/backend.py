@@ -50,6 +50,7 @@ class BackendConfig:
     vector_store: VectorStore | None = None
     eager_blobs: bool = False
     codec: Codec[Any] | None = None
+    page_size: int = 256
 
 
 @runtime_checkable
