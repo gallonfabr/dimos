@@ -106,6 +106,10 @@ def test_process_crash_triggers_stop() -> None:
             break
 
     assert mod._process is None, f"Watchdog did not clean up after process {pid} died"
+    # Explicitly stop to join watchdog, LCM, and event-loop threads from the
+    # test thread. The watchdog's self.stop() can't join itself, so these
+    # threads would otherwise leak. stop() is idempotent.
+    mod.stop()
 
 
 @pytest.mark.slow
