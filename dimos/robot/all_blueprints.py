@@ -122,7 +122,6 @@ all_modules = {
     "manipulation-module": "dimos.manipulation.manipulation_module",
     "mapper": "dimos.robot.unitree.type.map",
     "mcp-client": "dimos.agents.mcp.mcp_client",
-    "memory-module": "dimos.memory.module",
     "mid360-module": "dimos.hardware.sensors.lidar.livox.module",
     "navigation-skill": "dimos.agents.skills.navigation",
     "object-scene-registration-module": "dimos.perception.object_scene_registration",
