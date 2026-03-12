@@ -20,7 +20,7 @@ print(logs)
 Stream("logs")
 ```
 
-Append observations and query them:
+Append observations:
 
 ```python session=memory ansi=false
 logs.append("Motor started", ts=1.0, tags={"level": "info"})
@@ -35,7 +35,7 @@ print(logs.summary())
 Stream("logs"): 3 items, 1970-01-01 00:00:01 — 1970-01-01 00:00:03 (2.0s)
 ```
 
-### Filters
+## Filters
 
 Queries are lazy — chaining filters builds a pipeline without fetching:
 
@@ -50,7 +50,7 @@ Stream("logs") | AtFilter(t=1.0, tolerance=1.0) | BeforeFilter(t=5.0) | TagsFilt
 
 Available filters: `.after(t)`, `.before(t)`, `.at(t)`, `.near(pose, radius)`, `.tags(**kv)`, `.filter(predicate)`, `.search(embedding, k)`, `.order_by(field)`, `.limit(k)`, `.offset(n)`.
 
-### Terminals
+## Terminals
 
 Terminals materialize or consume the stream:
 
@@ -65,7 +65,7 @@ print(logs.before(5.0).tags(level="error").fetch())
 
 Available terminals: `.fetch()`, `.first()`, `.last()`, `.count()`, `.exists()`, `.summary()`, `.get_time_range()`, `.drain()`, `.save(target)`.
 
-### Transforms
+## Transforms
 
 `.map(fn)` transforms each observation, returning a new stream:
 
@@ -78,7 +78,7 @@ print(logs.map(lambda obs: obs.data.upper()).first())
 MOTOR STARTED
 ```
 
-### Live queries
+## Live queries
 
 Live queries backfill existing matches, then emit new ones as they arrive:
 
@@ -91,7 +91,7 @@ def emit_some_logs():
     time.sleep(0.1)
     logs.append("Sensor fault", ts=last_ts + 2, pose=(4.1, 2.0, 0.0), tags={"level": "error"})
     time.sleep(0.1)
-    logs.append("Battery charge 30%", ts=last_ts + 3, pose=(5.3, 2.5, 0.0), tags={"level": "info"})
+    logs.append("Battery low: 30%", ts=last_ts + 3, pose=(5.3, 2.5, 0.0), tags={"level": "info"})
     time.sleep(0.1)
     logs.append("Overtemp", ts=last_ts + 4, pose=(6.0, 3.0, 0.0), tags={"level": "error"})
     time.sleep(0.1)
@@ -116,19 +116,71 @@ with logs.tags(level="error").live() as errors:
 Filters compose freely. Here `.near()` + `.live()` + `.map()` watches for logs near a physical location — backfilling past matches and tailing new ones:
 
 ```python session=memory ansi=false
-
-with logs.near((5.0, 2.0), radius=2.0).live().map(lambda obs: f"log entry around our point of interest - {obs.data}") as logs_near:
-    # subscription is also contextmanager
+near_query = logs.near((5.0, 2.0), radius=2.0).live()
+with near_query.map(lambda obs: f"near POI - {obs.data}") as logs_near:
     with logs_near.subscribe(print):
         emit_some_logs()
 ```
 
 <!--Result:-->
 ```
-log entry around our point of interest - Sensor fault
-log entry around our point of interest - Battery charge 30%
-log entry around our point of interest - Overtemp
-log entry around our point of interest - Sensor fault
-log entry around our point of interest - Battery charge 30%
-log entry around our point of interest - Overtemp
+near POI - Sensor fault
+near POI - Battery low: 30%
+near POI - Overtemp
+near POI - Sensor fault
+near POI - Battery low: 30%
+near POI - Overtemp
+```
+
+## Embeddings
+
+Use `EmbedText` transformer with CLIP to enrich observations with embeddings, then search by similarity:
+
+`.search(embedding, k)` returns the top-k most similar observations by cosine similarity:
+
+```python session=memory ansi=false
+from dimos.models.embedding.clip import CLIPModel
+from dimos.memory2.embed import EmbedText
+
+clip = CLIPModel()
+
+for obs in logs.transform(EmbedText(clip)).search(clip.embed_text("hardware problem"), k=3).fetch():
+    print(f"{obs.similarity:.3f}  {obs.data}")
+```
+
+<!--Result:-->
+```
+0.897  Sensor fault
+0.897  Sensor fault
+0.887  Battery low: 30%
+```
+
+The embedded stream above was ephemeral — built on the fly for one query. To persist embeddings automatically as logs arrive, pipe a live stream through the transform into a stored stream:
+
+```python skip
+import threading
+
+embedded_logs = session.stream("embedded_logs", str)
+threading.Thread(
+    target=lambda: logs.live().transform(EmbedText(clip)).save(embedded_logs),
+    daemon=True,
+).start()
+
+# every new log is now automatically embedded and stored
+# embedded_logs.search(query, k=5).fetch() to query at any time
+```
+
+## Full text search
+
+`.search_text(text)` does efficient substring matching:
+
+```python session=memory ansi=false
+for obs in logs.search_text("motor").fetch():
+    print(f"{obs.data}")
+```
+
+<!--Result:-->
+```
+Motor started
+Motor stopped
 ```

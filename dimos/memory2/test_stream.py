@@ -161,7 +161,7 @@ class TestTagsFilter:
         stream.append("car", ts=1.0, tags={"type": "vehicle", "wheels": 4})
         stream.append("dog", ts=2.0, tags={"type": "animal", "legs": 4})
 
-        result = stream.filter_tags(type="animal").fetch()
+        result = stream.tags(type="animal").fetch()
         assert [o.data for o in result] == ["cat", "dog"]
 
     def test_filter_multiple_tags(self):
@@ -171,7 +171,7 @@ class TestTagsFilter:
         stream.append("a", ts=0.0, tags={"x": 1, "y": 2})
         stream.append("b", ts=1.0, tags={"x": 1, "y": 3})
 
-        result = stream.filter_tags(x=1, y=2).fetch()
+        result = stream.tags(x=1, y=2).fetch()
         assert [o.data for o in result] == ["a"]
 
 
@@ -674,7 +674,7 @@ class TestLiveMode:
         stream = session.stream("live_fetch")
         live = stream.live(buffer=Unbounded())
 
-        with pytest.raises(TypeError, match="collect forever"):
+        with pytest.raises(TypeError, match="block forever"):
             live.fetch()
 
     def test_fetch_on_live_transform_without_limit_raises(self):
@@ -685,7 +685,7 @@ class TestLiveMode:
         xf = FnTransformer(lambda obs: obs)
         live_xf = stream.live(buffer=Unbounded()).transform(xf)
 
-        with pytest.raises(TypeError, match="collect forever"):
+        with pytest.raises(TypeError, match="block forever"):
             live_xf.fetch()
 
     def test_count_on_live_transform_raises(self):

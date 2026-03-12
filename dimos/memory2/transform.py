@@ -15,7 +15,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+import inspect
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
+
+from dimos.memory2.formatting import FilterRepr
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -25,8 +28,10 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 R = TypeVar("R")
 
+_MISSING = object()
 
-class Transformer(ABC, Generic[T, R]):
+
+class Transformer(FilterRepr, ABC, Generic[T, R]):
     """Transforms a stream of observations lazily via iterator -> iterator.
 
     Pull from upstream, yield transformed observations. Naturally supports
@@ -36,6 +41,20 @@ class Transformer(ABC, Generic[T, R]):
 
     @abstractmethod
     def __call__(self, upstream: Iterator[Observation[T]]) -> Iterator[Observation[R]]: ...
+
+    def __str__(self) -> str:
+        parts: list[str] = []
+        for name in inspect.signature(self.__init__).parameters:  # type: ignore[misc]
+            val = getattr(self, name, _MISSING)
+            if val is _MISSING:
+                val = getattr(self, f"_{name}", _MISSING)
+            if val is _MISSING:
+                continue
+            if callable(val):
+                parts.append(f"{name}={getattr(val, '__name__', '...')}")
+            else:
+                parts.append(f"{name}={val!r}")
+        return f"{self.__class__.__name__}({', '.join(parts)})"
 
 
 class FnTransformer(Transformer[T, R]):
