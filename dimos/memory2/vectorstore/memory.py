@@ -42,17 +42,17 @@ class MemoryVectorStore(VectorStore):
 
     # ── VectorStore interface ────────────────────────────────────
 
-    def put(self, stream: str, key: int, embedding: Embedding) -> None:
-        self._vectors.setdefault(stream, {})[key] = embedding
+    def put(self, stream_name: str, key: int, embedding: Embedding) -> None:
+        self._vectors.setdefault(stream_name, {})[key] = embedding
 
-    def search(self, stream: str, query: Embedding, k: int) -> list[tuple[int, float]]:
-        vectors = self._vectors.get(stream, {})
+    def search(self, stream_name: str, query: Embedding, k: int) -> list[tuple[int, float]]:
+        vectors = self._vectors.get(stream_name, {})
         if not vectors:
             return []
         scored = [(key, float(emb @ query)) for key, emb in vectors.items()]
         scored.sort(key=lambda x: x[1], reverse=True)
         return scored[:k]
 
-    def delete(self, stream: str, key: int) -> None:
-        vectors = self._vectors.get(stream, {})
+    def delete(self, stream_name: str, key: int) -> None:
+        vectors = self._vectors.get(stream_name, {})
         vectors.pop(key, None)

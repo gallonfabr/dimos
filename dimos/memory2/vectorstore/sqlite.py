@@ -36,16 +36,16 @@ class SqliteVectorStore(VectorStore):
 
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn = conn
-        self._tables: dict[str, int] = {}  # stream -> dimensionality
+        self._tables: dict[str, int] = {}  # stream_name -> dimensionality
 
-    def _ensure_table(self, stream: str, dim: int) -> None:
-        if stream in self._tables:
+    def _ensure_table(self, stream_name: str, dim: int) -> None:
+        if stream_name in self._tables:
             return
         self._conn.execute(
-            f'CREATE VIRTUAL TABLE IF NOT EXISTS "{stream}_vec" '
+            f'CREATE VIRTUAL TABLE IF NOT EXISTS "{stream_name}_vec" '
             f"USING vec0(embedding float[{dim}] distance_metric=cosine)"
         )
-        self._tables[stream] = dim
+        self._tables[stream_name] = dim
 
     # ── Resource lifecycle ────────────────────────────────────────
 
@@ -57,26 +57,26 @@ class SqliteVectorStore(VectorStore):
 
     # ── VectorStore interface ────────────────────────────────────
 
-    def put(self, stream: str, key: int, embedding: Embedding) -> None:
+    def put(self, stream_name: str, key: int, embedding: Embedding) -> None:
         vec = embedding.to_numpy().tolist()
-        self._ensure_table(stream, len(vec))
+        self._ensure_table(stream_name, len(vec))
         self._conn.execute(
-            f'INSERT OR REPLACE INTO "{stream}_vec" (rowid, embedding) VALUES (?, ?)',
+            f'INSERT OR REPLACE INTO "{stream_name}_vec" (rowid, embedding) VALUES (?, ?)',
             (key, json.dumps(vec)),
         )
 
-    def search(self, stream: str, query: Embedding, k: int) -> list[tuple[int, float]]:
-        if stream not in self._tables:
+    def search(self, stream_name: str, query: Embedding, k: int) -> list[tuple[int, float]]:
+        if stream_name not in self._tables:
             return []
         vec = query.to_numpy().tolist()
         rows = self._conn.execute(
-            f'SELECT rowid, distance FROM "{stream}_vec" WHERE embedding MATCH ? AND k = ?',
+            f'SELECT rowid, distance FROM "{stream_name}_vec" WHERE embedding MATCH ? AND k = ?',
             (json.dumps(vec), k),
         ).fetchall()
         # vec0 cosine distance = 1 - cosine_similarity
         return [(int(row[0]), max(0.0, 1.0 - row[1])) for row in rows]
 
-    def delete(self, stream: str, key: int) -> None:
-        if stream not in self._tables:
+    def delete(self, stream_name: str, key: int) -> None:
+        if stream_name not in self._tables:
             return
-        self._conn.execute(f'DELETE FROM "{stream}_vec" WHERE rowid = ?', (key,))
+        self._conn.execute(f'DELETE FROM "{stream_name}_vec" WHERE rowid = ?', (key,))

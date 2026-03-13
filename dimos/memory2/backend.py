@@ -147,16 +147,16 @@ class VectorStore(Resource):
     """
 
     @abstractmethod
-    def put(self, stream: str, key: int, embedding: Embedding) -> None:
+    def put(self, stream_name: str, key: int, embedding: Embedding) -> None:
         """Store an embedding vector for the given stream and observation id."""
         ...
 
     @abstractmethod
-    def search(self, stream: str, query: Embedding, k: int) -> list[tuple[int, float]]:
+    def search(self, stream_name: str, query: Embedding, k: int) -> list[tuple[int, float]]:
         """Return top-k (observation_id, similarity) pairs, descending."""
         ...
 
     @abstractmethod
-    def delete(self, stream: str, key: int) -> None:
+    def delete(self, stream_name: str, key: int) -> None:
         """Remove a vector. Silent if missing."""
         ...
