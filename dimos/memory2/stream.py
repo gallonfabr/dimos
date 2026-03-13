@@ -18,9 +18,10 @@ import time
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from dimos.core.resource import Resource
-from dimos.memory2.backend import Backend
 from dimos.memory2.buffer import BackpressureBuffer, KeepLast
-from dimos.memory2.filter import (
+from dimos.memory2.transform import FnIterTransformer, FnTransformer, Transformer
+from dimos.memory2.type.backend import Backend
+from dimos.memory2.type.filter import (
     AfterFilter,
     AtFilter,
     BeforeFilter,
@@ -31,8 +32,7 @@ from dimos.memory2.filter import (
     TagsFilter,
     TimeRangeFilter,
 )
-from dimos.memory2.transform import FnIterTransformer, FnTransformer, Transformer
-from dimos.memory2.type import EmbeddedObservation, Observation
+from dimos.memory2.type.observation import EmbeddedObservation, Observation
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator

@@ -17,7 +17,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from dimos.memory2.backend import VectorStore
+from dimos.memory2.type.backend import VectorStore
+from dimos.memory2.utils import validate_identifier
 
 if TYPE_CHECKING:
     import sqlite3
@@ -41,6 +42,7 @@ class SqliteVectorStore(VectorStore):
     def _ensure_table(self, stream_name: str, dim: int) -> None:
         if stream_name in self._tables:
             return
+        validate_identifier(stream_name)
         self._conn.execute(
             f'CREATE VIRTUAL TABLE IF NOT EXISTS "{stream_name}_vec" '
             f"USING vec0(embedding float[{dim}] distance_metric=cosine)"

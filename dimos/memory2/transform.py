@@ -23,7 +23,7 @@ from dimos.memory2.formatting import FilterRepr
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
-    from dimos.memory2.type import Observation
+    from dimos.memory2.type.observation import Observation
 
 T = TypeVar("T")
 R = TypeVar("R")

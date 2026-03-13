@@ -14,10 +14,10 @@ Storage backends for memory. Each backend implements the `Backend` protocol to p
 ### 1. Implement the Backend protocol
 
 ```python
-from dimos.memory2.backend import Backend, BackendConfig, LiveChannel
-from dimos.memory2.filter import StreamQuery
+from dimos.memory2.type.backend import Backend, BackendConfig, LiveChannel
+from dimos.memory2.type.filter import StreamQuery
 from dimos.memory2.livechannel.subject import SubjectChannel
-from dimos.memory2.type import Observation
+from dimos.memory2.type.observation import Observation
 from dimos.protocol.service.spec import Configurable
 
 class MyBackend(Configurable[BackendConfig], Generic[T]):

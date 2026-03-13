@@ -158,7 +158,7 @@ class TestStoreBasic:
     def test_append_with_embedding(self, session: Session) -> None:
         import numpy as np
 
-        from dimos.memory2.type import EmbeddedObservation
+        from dimos.memory2.type.observation import EmbeddedObservation
         from dimos.models.embedding.base import Embedding
 
         s = session.stream("vectors", str)
@@ -208,7 +208,7 @@ class TestBlobLoading:
 
     def test_sqlite_lazy_by_default(self, sqlite_session: Session) -> None:
         """Default sqlite iteration uses lazy loaders — data is _UNLOADED until accessed."""
-        from dimos.memory2.type import _Unloaded
+        from dimos.memory2.type.observation import _Unloaded
 
         s = sqlite_session.stream("lazy_test", str)
         s.append("hello", ts=1.0)
@@ -226,7 +226,7 @@ class TestBlobLoading:
 
     def test_sqlite_eager_loads_inline(self, sqlite_session: Session) -> None:
         """With eager_blobs=True, data is loaded via JOIN — no lazy loader."""
-        from dimos.memory2.type import _Unloaded
+        from dimos.memory2.type.observation import _Unloaded
 
         s = sqlite_session.stream("eager_test", str, eager_blobs=True)
         s.append("hello", ts=1.0)
@@ -258,7 +258,7 @@ class TestBlobLoading:
     def test_memory_lazy_with_blobstore(self, memory_store, tmp_path) -> None:
         """MemoryStore with a BlobStore uses lazy loaders."""
         from dimos.memory2.blobstore.file import FileBlobStore
-        from dimos.memory2.type import _Unloaded
+        from dimos.memory2.type.observation import _Unloaded
 
         bs = FileBlobStore(root=tmp_path / "blobs")
         bs.start()

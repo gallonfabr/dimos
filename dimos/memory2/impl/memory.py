@@ -18,11 +18,11 @@ from dataclasses import replace
 import threading
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
-from dimos.memory2.backend import BackendConfig
 from dimos.memory2.codecs.base import Codec, codec_for
 from dimos.memory2.livechannel.subject import SubjectChannel
 from dimos.memory2.store import Session, Store
-from dimos.memory2.type import _UNLOADED
+from dimos.memory2.type.backend import BackendConfig
+from dimos.memory2.type.observation import _UNLOADED
 from dimos.protocol.service.spec import Configurable
 
 if TYPE_CHECKING:
@@ -30,10 +30,10 @@ if TYPE_CHECKING:
 
     from reactivex.abc import DisposableBase
 
-    from dimos.memory2.backend import Backend, LiveChannel
     from dimos.memory2.buffer import BackpressureBuffer
-    from dimos.memory2.filter import StreamQuery
-    from dimos.memory2.type import Observation
+    from dimos.memory2.type.backend import Backend, LiveChannel
+    from dimos.memory2.type.filter import StreamQuery
+    from dimos.memory2.type.observation import Observation
 
 T = TypeVar("T")
 

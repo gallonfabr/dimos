@@ -18,11 +18,11 @@ from __future__ import annotations
 
 import pytest
 
-from dimos.memory2.backend import Backend, LiveChannel
 from dimos.memory2.impl.memory import ListBackend
 from dimos.memory2.stream import Stream
 from dimos.memory2.transform import FnTransformer
-from dimos.memory2.type import Observation
+from dimos.memory2.type.backend import Backend, LiveChannel
+from dimos.memory2.type.observation import Observation
 
 # ── Helpers ──────────────────────────────────────────────────────────
 

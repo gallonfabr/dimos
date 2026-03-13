@@ -16,7 +16,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from dimos.memory2.backend import BlobStore
+from dimos.memory2.type.backend import BlobStore
+from dimos.memory2.utils import validate_identifier
 
 if TYPE_CHECKING:
     import sqlite3
@@ -43,6 +44,7 @@ class SqliteBlobStore(BlobStore):
     def _ensure_table(self, stream_name: str) -> None:
         if stream_name in self._tables:
             return
+        validate_identifier(stream_name)
         self._conn.execute(
             f'CREATE TABLE IF NOT EXISTS "{stream_name}_blob" '
             "(id INTEGER PRIMARY KEY, data BLOB NOT NULL)"

@@ -31,9 +31,9 @@ if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
 
-    from dimos.memory2.backend import BlobStore
     from dimos.memory2.impl.memory import MemorySession
     from dimos.memory2.store import Session
+    from dimos.memory2.type.backend import BlobStore
 
 
 # ── Stores ────────────────────────────────────────────────────────

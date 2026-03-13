@@ -27,7 +27,7 @@ import pytest
 
 from dimos.memory2.buffer import KeepLast, Unbounded
 from dimos.memory2.transform import FnTransformer, QualityWindow, Transformer
-from dimos.memory2.type import Observation
+from dimos.memory2.type.observation import Observation
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator

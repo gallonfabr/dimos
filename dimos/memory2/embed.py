@@ -22,7 +22,7 @@ from dimos.memory2.transform import Transformer
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from dimos.memory2.type import Observation
+    from dimos.memory2.type.observation import Observation
     from dimos.models.embedding.base import EmbeddingModel
 
 T = TypeVar("T")

@@ -17,7 +17,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from dimos.memory2.backend import BlobStore
+from dimos.memory2.type.backend import BlobStore
+from dimos.memory2.utils import validate_identifier
 
 if TYPE_CHECKING:
     import os
@@ -35,6 +36,7 @@ class FileBlobStore(BlobStore):
         self._root = Path(root)
 
     def _path(self, stream_name: str, key: int) -> Path:
+        validate_identifier(stream_name)
         return self._root / stream_name / f"{key}.bin"
 
     # ── Resource lifecycle ────────────────────────────────────────

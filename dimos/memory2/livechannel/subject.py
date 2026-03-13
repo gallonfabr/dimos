@@ -21,13 +21,13 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 
 from reactivex.disposable import Disposable
 
-from dimos.memory2.backend import LiveChannel
+from dimos.memory2.type.backend import LiveChannel
 
 if TYPE_CHECKING:
     from reactivex.abc import DisposableBase
 
     from dimos.memory2.buffer import BackpressureBuffer
-    from dimos.memory2.type import Observation
+    from dimos.memory2.type.observation import Observation
 
 T = TypeVar("T")
 

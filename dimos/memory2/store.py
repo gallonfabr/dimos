@@ -25,8 +25,8 @@ from dimos.protocol.service.spec import Configurable
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from dimos.memory2.backend import Backend, BlobStore, LiveChannel, VectorStore
     from dimos.memory2.codecs.base import Codec
+    from dimos.memory2.type.backend import Backend, BlobStore, LiveChannel, VectorStore
 
 T = TypeVar("T")
 

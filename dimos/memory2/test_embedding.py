@@ -19,7 +19,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from dimos.memory2.type import EmbeddedObservation, Observation
+from dimos.memory2.type.observation import EmbeddedObservation, Observation
 from dimos.models.embedding.base import Embedding
 
 # ── Helpers ───────────────────────────────────────────────────────

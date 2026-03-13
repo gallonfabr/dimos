@@ -23,7 +23,7 @@ import pytest
 
 from dimos.memory2.blobstore.file import FileBlobStore
 from dimos.memory2.impl.memory import MemoryStore
-from dimos.memory2.type import _UNLOADED
+from dimos.memory2.type.observation import _UNLOADED
 from dimos.models.embedding.base import Embedding
 
 if TYPE_CHECKING:

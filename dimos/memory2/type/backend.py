@@ -27,8 +27,8 @@ if TYPE_CHECKING:
 
     from dimos.memory2.buffer import BackpressureBuffer
     from dimos.memory2.codecs.base import Codec
-    from dimos.memory2.filter import StreamQuery
-    from dimos.memory2.type import Observation
+    from dimos.memory2.type.filter import StreamQuery
+    from dimos.memory2.type.observation import Observation
     from dimos.models.embedding.base import Embedding
 
 T = TypeVar("T")

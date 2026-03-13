@@ -23,10 +23,12 @@ import threading
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from dimos.core.resource import CompositeResource
-from dimos.memory2.backend import BackendConfig
 from dimos.memory2.blobstore.sqlite import SqliteBlobStore
 from dimos.memory2.codecs.base import Codec, codec_for, codec_from_id, codec_id
-from dimos.memory2.filter import (
+from dimos.memory2.livechannel.subject import SubjectChannel
+from dimos.memory2.store import Session, Store, StoreConfig
+from dimos.memory2.type.backend import BackendConfig
+from dimos.memory2.type.filter import (
     AfterFilter,
     AtFilter,
     BeforeFilter,
@@ -35,9 +37,8 @@ from dimos.memory2.filter import (
     TimeRangeFilter,
     _xyz,
 )
-from dimos.memory2.livechannel.subject import SubjectChannel
-from dimos.memory2.store import Session, Store, StoreConfig
-from dimos.memory2.type import _UNLOADED, Observation
+from dimos.memory2.type.observation import _UNLOADED, Observation
+from dimos.memory2.utils import validate_identifier
 from dimos.protocol.service.spec import Configurable
 
 if TYPE_CHECKING:
@@ -45,9 +46,9 @@ if TYPE_CHECKING:
 
     from reactivex.abc import DisposableBase
 
-    from dimos.memory2.backend import Backend, LiveChannel
     from dimos.memory2.buffer import BackpressureBuffer
-    from dimos.memory2.filter import Filter, StreamQuery
+    from dimos.memory2.type.backend import Backend, LiveChannel
+    from dimos.memory2.type.filter import Filter, StreamQuery
 
 T = TypeVar("T")
 
@@ -55,11 +56,6 @@ _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 # ── Helpers ──────────────────────────────────────────────────────
-
-
-def _validate_identifier(name: str) -> None:
-    if not _IDENT_RE.match(name):
-        raise ValueError(f"Invalid stream name: {name!r}")
 
 
 def _decompose_pose(pose: Any) -> tuple[float, ...] | None:
@@ -554,7 +550,7 @@ class SqliteSession(Session):
     def _create_backend(
         self, name: str, payload_type: type[Any] | None = None, **config: Any
     ) -> Backend[Any]:
-        _validate_identifier(name)
+        validate_identifier(name)
 
         # Look up existing stream in registry
         row = self._registry_conn.execute(
