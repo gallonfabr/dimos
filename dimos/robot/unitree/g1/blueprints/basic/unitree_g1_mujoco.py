@@ -23,8 +23,15 @@ blueprint.  It uses the shared ``_vis`` / ``_mapper`` primitives and the
 import math
 from typing import Any
 
+from dimos_lcm.sensor_msgs import CameraInfo as LCMCameraInfo
+
 from dimos.core.blueprints import autoconnect
 from dimos.core.global_config import global_config
+from dimos.core.transport import LCMTransport
+from dimos.msgs.geometry_msgs import PoseStamped, Twist
+from dimos.msgs.nav_msgs import Path
+from dimos.msgs.sensor_msgs import Image, PointCloud2
+from dimos.msgs.std_msgs import Bool
 from dimos.navigation.replanning_a_star.module import replanning_a_star_planner
 from dimos.protocol.pubsub.impl.lcmpubsub import LCM
 from dimos.robot.unitree.g1.blueprints.primitive._mapper import _mapper
@@ -81,12 +88,28 @@ _vis_mujoco = vis_module(
     },
 )
 
-unitree_g1_mujoco = autoconnect(
-    _vis_mujoco,
-    _mapper,
-    websocket_vis(),
-    g1_sim_connection(),
-    replanning_a_star_planner(),
-).global_config(n_workers=4, robot_model="unitree_g1")
+unitree_g1_mujoco = (
+    autoconnect(
+        _vis_mujoco,
+        _mapper,
+        websocket_vis(),
+        g1_sim_connection(),
+        replanning_a_star_planner(),
+    )
+    .global_config(n_workers=4, robot_model="unitree_g1")
+    .transports(
+        {
+            ("cmd_vel", Twist): LCMTransport("/cmd_vel", Twist),
+            ("odom", PoseStamped): LCMTransport("/odom", PoseStamped),
+            ("color_image", Image): LCMTransport("/color_image", Image),
+            ("camera_info", LCMCameraInfo): LCMTransport("/camera_info", LCMCameraInfo),
+            ("lidar", PointCloud2): LCMTransport("/lidar", PointCloud2),
+            ("path", Path): LCMTransport("/path", Path),
+            ("goal_reached", Bool): LCMTransport("/goal_reached", Bool),
+            ("goal_request", PoseStamped): LCMTransport("/goal_request", PoseStamped),
+            ("global_map", PointCloud2): LCMTransport("/global_map", PointCloud2),
+        }
+    )
+)
 
 __all__ = ["unitree_g1_mujoco"]
