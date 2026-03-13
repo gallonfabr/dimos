@@ -16,69 +16,15 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-import sqlite3
 from typing import TYPE_CHECKING
 
 import pytest
 
-from dimos.memory2.blobstore.file import FileBlobStore
-from dimos.memory2.blobstore.sqlite import SqliteBlobStore
-
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator
-    from pathlib import Path
-
     from dimos.memory2.backend import BlobStore
 
 
-# ── Case definition ────────────────────────────────────────────────
-
-
-@dataclass
-class Case:
-    name: str
-    factory: Callable[..., Generator[BlobStore, None, None]]
-
-
-# ── Factories ──────────────────────────────────────────────────────
-
-
-@pytest.fixture()
-def file_store(tmp_path: Path) -> Generator[FileBlobStore, None, None]:
-    store = FileBlobStore(tmp_path / "blobs")
-    store.start()
-    yield store
-    store.stop()
-
-
-@pytest.fixture()
-def sqlite_store() -> Generator[SqliteBlobStore, None, None]:
-    conn = sqlite3.connect(":memory:")
-    store = SqliteBlobStore(conn)
-    store.start()
-    yield store
-    store.stop()
-    conn.close()
-
-
-@pytest.fixture(params=["file", "sqlite"])
-def blob_store(
-    request: pytest.FixtureRequest,
-    file_store: FileBlobStore,
-    sqlite_store: SqliteBlobStore,
-) -> BlobStore:
-    if request.param == "file":
-        return file_store
-    return sqlite_store
-
-
-# ── Tests ──────────────────────────────────────────────────────────
-
-
 class TestBlobStore:
-    """Every BlobStore must satisfy these contracts."""
-
     def test_put_get_roundtrip(self, blob_store: BlobStore) -> None:
         data = b"hello world"
         blob_store.put("stream_a", 1, data)
@@ -111,4 +57,5 @@ class TestBlobStore:
     def test_large_blob(self, blob_store: BlobStore) -> None:
         data = bytes(range(256)) * 1000  # 256 KB
         blob_store.put("big", 0, data)
+        assert blob_store.get("big", 0) == data
         assert blob_store.get("big", 0) == data
