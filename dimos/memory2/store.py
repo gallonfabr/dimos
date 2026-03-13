@@ -15,12 +15,11 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from dimos.core.resource import CompositeResource
 from dimos.memory2.stream import Stream
-from dimos.protocol.service.spec import Configurable
+from dimos.protocol.service.spec import BaseConfig, Configurable
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -34,13 +33,11 @@ T = TypeVar("T")
 # ── Configuration ─────────────────────────────────────────────────
 
 
-@dataclass
-class StoreConfig:
+class StoreConfig(BaseConfig):
     """Base config for Store. Subclasses extend with store-specific fields."""
 
 
-@dataclass
-class SessionConfig:
+class SessionConfig(BaseConfig):
     """Session-level defaults for stream capabilities.
 
     These are inherited by all streams in the session unless overridden

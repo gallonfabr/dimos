@@ -15,10 +15,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar, runtime_checkable
 
 from dimos.core.resource import Resource
+from dimos.protocol.service.spec import BaseConfig
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -37,8 +37,7 @@ T = TypeVar("T")
 # ── Backend configuration ───────────────────────────────────────
 
 
-@dataclass
-class BackendConfig:
+class BackendConfig(BaseConfig):
     """Configuration for backend capabilities.
 
     Session-level defaults are merged with per-stream overrides and

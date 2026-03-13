@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from itertools import islice
 import json
 import re
@@ -650,7 +650,6 @@ class SqliteSession(Session):
 # ── SqliteStore ──────────────────────────────────────────────────
 
 
-@dataclass
 class SqliteStoreConfig(StoreConfig):
     """Config for SQLite-backed store."""
 
