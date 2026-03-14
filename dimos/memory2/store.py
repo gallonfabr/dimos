@@ -14,13 +14,16 @@
 
 from __future__ import annotations
 
-from abc import abstractmethod
 from typing import Any, TypeVar, cast
 
 from dimos.core.resource import CompositeResource
+from dimos.memory2.backend import Backend
 from dimos.memory2.blobstore.base import BlobStore
-from dimos.memory2.codecs.base import Codec
+from dimos.memory2.codecs.base import Codec, codec_for, codec_from_id
 from dimos.memory2.notifier.base import Notifier
+from dimos.memory2.notifier.subject import SubjectNotifier
+from dimos.memory2.observationstore.base import ObservationStore
+from dimos.memory2.observationstore.memory import ListObservationStore
 from dimos.memory2.stream import Stream
 from dimos.memory2.vectorstore.base import VectorStore
 from dimos.protocol.service.spec import BaseConfig, Configurable
@@ -32,13 +35,18 @@ T = TypeVar("T")
 
 
 class StoreConfig(BaseConfig):
-    """Store-level config. These are defaults inherited by all streams."""
+    """Store-level config. These are defaults inherited by all streams.
 
-    notifier: Notifier[Any] | None = None
-    blob_store: BlobStore | None = None
-    vector_store: VectorStore | None = None
+    Component fields accept either a class (instantiated per-stream) or
+    a live instance (used directly). Classes are the default; instances
+    are for overrides (e.g. spy stores in tests, shared external stores).
+    """
+
+    observation_store: type[ObservationStore] | ObservationStore | None = None  # type: ignore[type-arg]
+    blob_store: type[BlobStore] | BlobStore | None = None
+    vector_store: type[VectorStore] | VectorStore | None = None
+    notifier: type[Notifier] | Notifier | None = None  # type: ignore[type-arg]
     eager_blobs: bool = False
-    codec: Codec[Any] | str | None = None
 
 
 # ── Store ─────────────────────────────────────────────────────────
@@ -57,12 +65,52 @@ class Store(Configurable[StoreConfig], CompositeResource):
         CompositeResource.__init__(self)
         self._streams: dict[str, Stream[Any]] = {}
 
-    @abstractmethod
+    @staticmethod
+    def _resolve_codec(
+        payload_type: type[Any] | None, raw_codec: Codec[Any] | str | None
+    ) -> Codec[Any]:
+        if isinstance(raw_codec, Codec):
+            return raw_codec
+        if isinstance(raw_codec, str):
+            module = (
+                f"{payload_type.__module__}.{payload_type.__qualname__}"
+                if payload_type
+                else "builtins.object"
+            )
+            return codec_from_id(raw_codec, module)
+        return codec_for(payload_type)
+
     def _create_backend(
         self, name: str, payload_type: type[Any] | None = None, **config: Any
-    ) -> Any:
+    ) -> Backend[Any]:
         """Create a Backend for the named stream. Called once per stream name."""
-        ...
+        codec = self._resolve_codec(payload_type, config.pop("codec", None))
+
+        # Instantiate or use provided instances
+        obs = config.pop("observation_store", self.config.observation_store)
+        if obs is None or isinstance(obs, type):
+            obs = (obs or ListObservationStore)(name)
+
+        bs = config.pop("blob_store", self.config.blob_store)
+        if isinstance(bs, type):
+            bs = bs()
+
+        vs = config.pop("vector_store", self.config.vector_store)
+        if isinstance(vs, type):
+            vs = vs()
+
+        notifier = config.pop("notifier", self.config.notifier)
+        if notifier is None or isinstance(notifier, type):
+            notifier = (notifier or SubjectNotifier)()
+
+        return Backend(
+            metadata_store=obs,
+            codec=codec,
+            blob_store=bs,
+            vector_store=vs,
+            notifier=notifier,
+            eager_blobs=config.get("eager_blobs", False),
+        )
 
     def stream(self, name: str, payload_type: type[T] | None = None, **overrides: Any) -> Stream[T]:
         """Get or create a named stream. Returns the same Stream on repeated calls.
@@ -76,12 +124,10 @@ class Store(Configurable[StoreConfig], CompositeResource):
             self._streams[name] = Stream(source=backend)
         return cast("Stream[T]", self._streams[name])
 
-    @abstractmethod
     def list_streams(self) -> list[str]:
         """Return names of all streams in this store."""
-        ...
+        return list(self._streams.keys())
 
-    @abstractmethod
     def delete_stream(self, name: str) -> None:
         """Delete a stream by name (from cache and underlying storage)."""
-        ...
+        self._streams.pop(name, None)

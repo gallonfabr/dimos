@@ -20,12 +20,15 @@ from typing import Any
 from reactivex.disposable import Disposable
 
 from dimos.memory2.backend import Backend
+from dimos.memory2.blobstore.base import BlobStore
 from dimos.memory2.blobstore.sqlite import SqliteBlobStore
-from dimos.memory2.codecs.base import Codec, codec_for, codec_from_id, codec_id
+from dimos.memory2.codecs.base import codec_id
 from dimos.memory2.observationstore.sqlite import SqliteObservationStore
 from dimos.memory2.registry import RegistryStore, deserialize_component, qual
 from dimos.memory2.store import Store, StoreConfig
 from dimos.memory2.utils import open_sqlite_connection, validate_identifier
+from dimos.memory2.vectorstore.base import VectorStore
+from dimos.memory2.vectorstore.sqlite import SqliteVectorStore
 
 # ── SqliteStore ──────────────────────────────────────────────────
 
@@ -52,63 +55,12 @@ class SqliteStore(Store):
         """Open a new WAL-mode connection with sqlite-vec loaded."""
         return open_sqlite_connection(self.config.path)
 
-    # ── Backend from live objects (create path) ──────────────────
-
-    def _build_new_backend(
-        self,
-        name: str,
-        payload_type: type[Any],
-        backend_conn: sqlite3.Connection,
-        **config: Any,
-    ) -> Backend[Any]:
-        """Build a Backend for a new stream using live objects from config."""
-        payload_module = f"{payload_type.__module__}.{payload_type.__qualname__}"
-
-        # Resolve codec
-        raw_codec = config.get("codec")
-        if isinstance(raw_codec, str):
-            codec = codec_from_id(raw_codec, payload_module)
-        elif isinstance(raw_codec, Codec):
-            codec = raw_codec
-        elif raw_codec is not None:
-            codec = raw_codec
-        else:
-            codec = codec_for(payload_type)
-
-        # Resolve components — use overrides or create conn-shared defaults
-        bs = config.get("blob_store")
-        if bs is None:
-            bs = SqliteBlobStore(backend_conn)
-        vs = config.get("vector_store")
-        if vs is None:
-            from dimos.memory2.vectorstore.sqlite import SqliteVectorStore
-
-            vs = SqliteVectorStore(backend_conn)
-
-        blob_store_conn_match = isinstance(bs, SqliteBlobStore) and bs._conn is backend_conn
-        eager_blobs = config.get("eager_blobs", False)
-
-        metadata_store: SqliteObservationStore[Any] = SqliteObservationStore(
-            backend_conn,
-            name,
-            codec,
-            blob_store_conn_match=blob_store_conn_match and eager_blobs,
-            page_size=config.get("page_size", self.config.page_size),
-        )
-
-        return Backend(
-            metadata_store=metadata_store,
-            codec=codec,
-            blob_store=bs,
-            vector_store=vs,
-            notifier=config.get("notifier"),
-            eager_blobs=eager_blobs,
-        )
-
     # ── Backend from stored config (load path) ───────────────────
 
     def _assemble_backend(self, name: str, stored: dict[str, Any]) -> Backend[Any]:
         """Reconstruct a Backend from a stored config dict."""
+        from dimos.memory2.codecs.base import codec_from_id
+
         payload_module = stored["payload_module"]
         codec = codec_from_id(stored["codec_id"], payload_module)
         eager_blobs = stored.get("eager_blobs", False)
@@ -129,16 +81,12 @@ class SqliteStore(Store):
 
         vs_data = stored.get("vector_store")
         if vs_data is not None:
-            from dimos.memory2.vectorstore.sqlite import SqliteVectorStore
-
             vs_cfg = vs_data.get("config", {})
             if vs_cfg.get("path") is None and vs_data["class"] == qual(SqliteVectorStore):
                 vs: Any = SqliteVectorStore(backend_conn)
             else:
                 vs = deserialize_component(vs_data)
         else:
-            from dimos.memory2.vectorstore.sqlite import SqliteVectorStore
-
             vs = SqliteVectorStore(backend_conn)
 
         notifier_data = stored.get("notifier")
@@ -209,23 +157,47 @@ class SqliteStore(Store):
                         f"Stream {name!r} was created with type {stored['payload_module']}, "
                         f"but opened with {actual_module}"
                     )
-            backend = self._assemble_backend(name, stored)
-        else:
-            # Create path: build from live objects, then persist config
-            if payload_type is None:
-                raise TypeError(f"Stream {name!r} does not exist yet — payload_type is required")
+            return self._assemble_backend(name, stored)
 
-            backend_conn = self._open_connection()
-            self.register_disposables(Disposable(action=lambda: backend_conn.close()))
+        # Create path: inject conn-shared defaults, then delegate to base
+        if payload_type is None:
+            raise TypeError(f"Stream {name!r} does not exist yet — payload_type is required")
 
-            page_size = config.get("page_size", self.config.page_size)
-            backend = self._build_new_backend(name, payload_type, backend_conn, **config)
+        backend_conn = self._open_connection()
+        self.register_disposables(Disposable(action=lambda: backend_conn.close()))
 
-            payload_module = f"{payload_type.__module__}.{payload_type.__qualname__}"
-            self._registry.put(
-                name,
-                self._serialize_backend(backend, payload_module, page_size),
-            )
+        # Inject conn-shared instances unless user provided overrides
+        if not isinstance(config.get("blob_store"), BlobStore):
+            config["blob_store"] = SqliteBlobStore(backend_conn)
+        if not isinstance(config.get("vector_store"), VectorStore):
+            config["vector_store"] = SqliteVectorStore(backend_conn)
+
+        # Resolve codec early — needed for SqliteObservationStore
+        codec = self._resolve_codec(payload_type, config.get("codec"))
+        config["codec"] = codec
+
+        # Create SqliteObservationStore with conn-sharing
+        bs = config["blob_store"]
+        blob_conn_match = isinstance(bs, SqliteBlobStore) and bs._conn is backend_conn
+        eager_blobs = config.get("eager_blobs", False)
+        config["observation_store"] = SqliteObservationStore(
+            backend_conn,
+            name,
+            codec,
+            blob_store_conn_match=blob_conn_match and eager_blobs,
+            page_size=config.pop("page_size", self.config.page_size),
+        )
+
+        backend = super()._create_backend(name, payload_type, **config)
+
+        # Persist to registry
+        payload_module = f"{payload_type.__module__}.{payload_type.__qualname__}"
+        self._registry.put(
+            name,
+            self._serialize_backend(
+                backend, payload_module, config["observation_store"]._page_size
+            ),
+        )
 
         return backend
 
@@ -234,7 +206,7 @@ class SqliteStore(Store):
         return sorted(db_names | set(self._streams.keys()))
 
     def delete_stream(self, name: str) -> None:
-        self._streams.pop(name, None)
+        super().delete_stream(name)
         self._registry_conn.execute(f'DROP TABLE IF EXISTS "{name}"')
         self._registry_conn.execute(f'DROP TABLE IF EXISTS "{name}_blob"')
         self._registry_conn.execute(f'DROP TABLE IF EXISTS "{name}_vec"')
@@ -242,5 +214,5 @@ class SqliteStore(Store):
         self._registry.delete(name)
 
     def stop(self) -> None:
-        super().stop()  # disposes owned metadata store connections
+        super().stop()
         self._registry_conn.close()
