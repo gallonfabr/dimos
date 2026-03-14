@@ -40,7 +40,7 @@ def deserialize_component(data: dict[str, Any]) -> Any:
 
 
 class RegistryStoreConfig(BaseConfig):
-    conn: sqlite3.Connection | None = Field(default=None, exclude=True)
+    conn: sqlite3.Connection = Field(exclude=True)
 
 
 class RegistryStore(Configurable[RegistryStoreConfig]):
@@ -50,7 +50,6 @@ class RegistryStore(Configurable[RegistryStoreConfig]):
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        assert self.config.conn is not None, "conn is required"
         self._conn: sqlite3.Connection = self.config.conn
         self._conn.execute(
             "CREATE TABLE IF NOT EXISTS _streams ("

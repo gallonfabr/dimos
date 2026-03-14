@@ -73,20 +73,15 @@ def session(request: pytest.FixtureRequest) -> Store:
 
 @pytest.fixture
 def file_blob_store(tmp_path: Path) -> Generator[FileBlobStore, None, None]:
-    store = FileBlobStore(root=str(tmp_path / "blobs"))
-    store.start()
-    yield store
-    store.stop()
+    with FileBlobStore(root=str(tmp_path / "blobs")) as store:
+        yield store
 
 
 @pytest.fixture
 def sqlite_blob_store() -> Generator[SqliteBlobStore, None, None]:
     conn = sqlite3.connect(":memory:")
-    store = SqliteBlobStore(conn=conn)
-    store.start()
-    yield store
-    store.stop()
-    conn.close()
+    with SqliteBlobStore(conn=conn) as store:
+        yield store
 
 
 @pytest.fixture(params=["file_blob_store", "sqlite_blob_store"])
