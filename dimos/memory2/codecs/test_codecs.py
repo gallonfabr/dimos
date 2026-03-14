@@ -25,7 +25,6 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from dimos.memory2.codecs.base import Codec, codec_for
-from dimos.memory2.codecs.jpeg import JpegCodec
 from dimos.memory2.codecs.lcm import LcmCodec
 from dimos.memory2.codecs.pickle import PickleCodec
 from dimos.msgs.geometry_msgs.PoseStamped import PoseStamped
@@ -178,4 +177,6 @@ class TestCodecFor:
 
     def test_image_type_returns_jpeg(self) -> None:
         pytest.importorskip("turbojpeg")
+        from dimos.memory2.codecs.jpeg import JpegCodec
+
         assert isinstance(codec_for(Image), JpegCodec)
