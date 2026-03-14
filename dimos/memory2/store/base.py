@@ -31,6 +31,37 @@ from dimos.protocol.service.spec import BaseConfig, Configurable
 T = TypeVar("T")
 
 
+class StreamAccessor:
+    """Attribute-style access: ``store.streams.name`` -> ``store.stream(name)``."""
+
+    __slots__ = ("_store",)
+
+    def __init__(self, store: Store) -> None:
+        object.__setattr__(self, "_store", store)
+
+    def __getattr__(self, name: str) -> Stream[Any]:
+        if name.startswith("_"):
+            raise AttributeError(name)
+        store: Store = object.__getattribute__(self, "_store")
+        if name not in store.list_streams():
+            raise AttributeError(f"No stream {name!r}. Available: {store.list_streams()}")
+        return store.stream(name)
+
+    def __getitem__(self, name: str) -> Stream[Any]:
+        store: Store = object.__getattribute__(self, "_store")
+        if name not in store.list_streams():
+            raise KeyError(name)
+        return store.stream(name)
+
+    def __dir__(self) -> list[str]:
+        store: Store = object.__getattribute__(self, "_store")
+        return store.list_streams()
+
+    def __repr__(self) -> str:
+        names = object.__getattribute__(self, "_store").list_streams()
+        return f"StreamAccessor({names})"
+
+
 class StoreConfig(BaseConfig):
     """Store-level config. These are defaults inherited by all streams.
 
@@ -58,6 +89,11 @@ class Store(Configurable[StoreConfig], CompositeResource):
         Configurable.__init__(self, **kwargs)
         CompositeResource.__init__(self)
         self._streams: dict[str, Stream[Any]] = {}
+
+    @property
+    def streams(self) -> StreamAccessor:
+        """Attribute-style access to streams: ``store.streams.name``."""
+        return StreamAccessor(self)
 
     @staticmethod
     def _resolve_codec(

@@ -487,3 +487,41 @@ class TestStandaloneComponents:
         with pytest.raises(ValueError, match="either conn or path"):
             SqliteObservationStore(name="x")
         conn.close()
+
+
+class TestStreamAccessor:
+    """Test attribute-style stream access via store.streams."""
+
+    def test_accessor_returns_same_stream(self, session: Store) -> None:
+        s = session.stream("images", bytes)
+        assert session.streams.images is s
+
+    def test_accessor_dir_lists_streams(self, session: Store) -> None:
+        session.stream("alpha", str)
+        session.stream("beta", int)
+        names = dir(session.streams)
+        assert "alpha" in names
+        assert "beta" in names
+
+    def test_accessor_missing_raises(self, session: Store) -> None:
+        with pytest.raises(AttributeError, match="nonexistent"):
+            _ = session.streams.nonexistent
+
+    def test_accessor_getitem(self, session: Store) -> None:
+        s = session.stream("data", float)
+        assert session.streams["data"] is s
+
+    def test_accessor_getitem_missing_raises(self, session: Store) -> None:
+        with pytest.raises(KeyError):
+            session.streams["nope"]
+
+    def test_accessor_repr(self, session: Store) -> None:
+        session.stream("x", str)
+        r = repr(session.streams)
+        assert "x" in r
+        assert "StreamAccessor" in r
+
+    def test_accessor_dynamic(self, session: Store) -> None:
+        assert "late" not in dir(session.streams)
+        session.stream("late", str)
+        assert "late" in dir(session.streams)
