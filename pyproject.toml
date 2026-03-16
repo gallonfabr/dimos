@@ -291,6 +291,12 @@ sim = [
     "pygame>=2.6.1",
 ]
 
+navigation = [
+    # PGO (pose graph optimization) — gtsam-develop has aarch64 wheels; stable gtsam 4.2 does not
+    "gtsam>=4.2; platform_machine != 'aarch64'",
+    "gtsam-develop; platform_machine == 'aarch64'",
+]
+
 # NOTE: jetson-jp6-cuda126 extra is disabled due to 404 errors from wheel URLs
 # The pypi.jetson-ai-lab.io URLs are currently unavailable. Update with working URLs when available.
 # jetson-jp6-cuda126 = [
@@ -338,6 +344,11 @@ docker = [
 base = [
     "dimos[agents,web,perception,visualization,sim]",
 ]
+
+[tool.uv]
+# gtsam-develop incorrectly declares pytest as a runtime dependency (packaging bug).
+# Override it to keep our pinned version.
+override-dependencies = ["pytest==8.3.5"]
 
 [tool.ruff]
 line-length = 100
