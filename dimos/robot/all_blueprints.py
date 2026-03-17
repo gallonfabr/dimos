@@ -50,6 +50,8 @@ all_blueprints = {
     "demo-object-scene-registration": "dimos.perception.demo_object_scene_registration:demo_object_scene_registration",
     "demo-osm": "dimos.mapping.osm.demo_osm:demo_osm",
     "demo-skill": "dimos.agents.skills.demo_skill:demo_skill",
+    "depth-anything3-webcam": "dimos.perception.depth.depth_anything3.blueprints.webcam:depth_anything3_webcam",
+    "depth-anything3-webcam-temporal": "dimos.perception.depth.depth_anything3.blueprints.webcam:depth_anything3_webcam_temporal",
     "drone-agentic": "dimos.robot.drone.blueprints.agentic.drone_agentic:drone_agentic",
     "drone-basic": "dimos.robot.drone.blueprints.basic.drone_basic:drone_basic",
     "dual-xarm6-planner": "dimos.manipulation.blueprints:dual_xarm6_planner",
