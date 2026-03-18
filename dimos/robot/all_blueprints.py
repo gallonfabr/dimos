@@ -16,10 +16,9 @@
 # Run `pytest dimos/robot/test_all_blueprints_generation.py` to regenerate.
 
 all_blueprints = {
-    "arm-teleop": "dimos.teleop.quest.blueprints:arm_teleop",
     "arm-teleop-dual": "dimos.teleop.quest.blueprints:arm_teleop_dual",
     "arm-teleop-piper": "dimos.teleop.quest.blueprints:arm_teleop_piper",
-    "arm-teleop-visualizing": "dimos.teleop.quest.blueprints:arm_teleop_visualizing",
+    "arm-teleop-rerun": "dimos.teleop.quest.blueprints:arm_teleop_rerun",
     "arm-teleop-xarm7": "dimos.teleop.quest.blueprints:arm_teleop_xarm7",
     "coordinator-basic": "dimos.control.blueprints:coordinator_basic",
     "coordinator-cartesian-ik-mock": "dimos.control.blueprints:coordinator_cartesian_ik_mock",
@@ -143,7 +142,6 @@ all_modules = {
     "temporal-memory": "dimos.perception.experimental.temporal_memory.temporal_memory",
     "twist-teleop-module": "dimos.teleop.quest.quest_extensions",
     "unitree-skills": "dimos.robot.unitree.unitree_skill_container",
-    "visualizing-teleop-module": "dimos.teleop.quest.quest_extensions",
     "vlm-agent": "dimos.agents.vlm_agent",
     "vlm-stream-tester": "dimos.agents.vlm_stream_tester",
     "voxel-mapper": "dimos.mapping.voxels",

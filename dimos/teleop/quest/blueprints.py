@@ -23,23 +23,14 @@ from dimos.control.blueprints import (
 from dimos.core.blueprints import autoconnect
 from dimos.core.transport import LCMTransport
 from dimos.msgs.geometry_msgs.PoseStamped import PoseStamped
-from dimos.teleop.quest.quest_extensions import arm_teleop_module, visualizing_teleop_module
+from dimos.teleop.quest.quest_extensions import arm_teleop_module
 from dimos.teleop.quest.quest_types import Buttons
+from dimos.visualization.rerun.bridge import rerun_bridge
 
-# Arm teleop with press-and-hold engage
-arm_teleop = autoconnect(
+# Arm teleop with press-and-hold engage (has rerun viz)
+arm_teleop_rerun = autoconnect(
     arm_teleop_module(),
-).transports(
-    {
-        ("left_controller_output", PoseStamped): LCMTransport("/teleop/left_delta", PoseStamped),
-        ("right_controller_output", PoseStamped): LCMTransport("/teleop/right_delta", PoseStamped),
-        ("buttons", Buttons): LCMTransport("/teleop/buttons", Buttons),
-    }
-)
-
-# Arm teleop with Rerun visualization
-arm_teleop_visualizing = autoconnect(
-    visualizing_teleop_module(),
+    rerun_bridge(),
 ).transports(
     {
         ("left_controller_output", PoseStamped): LCMTransport("/teleop/left_delta", PoseStamped),
@@ -98,9 +89,8 @@ arm_teleop_dual = autoconnect(
 
 
 __all__ = [
-    "arm_teleop",
     "arm_teleop_dual",
     "arm_teleop_piper",
-    "arm_teleop_visualizing",
+    "arm_teleop_rerun",
     "arm_teleop_xarm7",
 ]
