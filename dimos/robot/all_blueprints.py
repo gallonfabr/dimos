@@ -163,6 +163,7 @@ all_modules = {
     "rerun-bridge-module": "dimos.visualization.rerun.bridge",
     "rerun-web-socket-server": "dimos.visualization.rerun.websocket_server",
     "ros-nav": "dimos.navigation.rosnav",
+    "scan-corrector": "dimos.navigation.scan_corrector",
     "simple-phone-teleop": "dimos.teleop.phone.phone_extensions",
     "spatial-memory": "dimos.perception.spatial_perception",
     "speak-skill": "dimos.agents.skills.speak_skill",
