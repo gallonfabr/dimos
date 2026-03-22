@@ -186,7 +186,7 @@ class _IncrementalMapCore:
         q_last = Rotation.from_matrix(last.r_local).as_quat()
         dot = float(np.clip(np.dot(q_cur, q_last), -1.0, 1.0))
         ddeg = float(np.degrees(2.0 * np.arccos(abs(dot))))
-        return dt > self._cfg.key_trans or ddeg > self._cfg.key_deg
+        return bool(dt > self._cfg.key_trans or ddeg > self._cfg.key_deg)
 
     def add_scan(
         self,
@@ -379,13 +379,13 @@ class IncrementalMap(Module[IncrementalMapConfig]):
         self._has_odom = False
         self._last_map_publish = 0.0
 
-    def __getstate__(self) -> dict:
-        state = super().__getstate__()
+    def __getstate__(self) -> dict[str, object]:
+        state: dict[str, object] = super().__getstate__()  # type: ignore[no-untyped-call]
         for k in ("_lock", "_thread", "_core"):
             state.pop(k, None)
         return state
 
-    def __setstate__(self, state: dict) -> None:
+    def __setstate__(self, state: dict[str, object]) -> None:
         super().__setstate__(state)
         self._lock = threading.Lock()
         self._thread = None

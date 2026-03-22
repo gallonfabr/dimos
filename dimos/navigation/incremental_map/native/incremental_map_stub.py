@@ -139,9 +139,9 @@ def main() -> None:
     last_ts = 0.0
     has_odom = False
 
-    def on_odom(channel, data):
+    def on_odom(channel: str, data: bytes) -> None:  # type: ignore[misc]
         nonlocal last_r, last_t, last_ts, has_odom
-        msg = Odometry.decode(data)
+        msg = Odometry.decode(data)  # type: ignore[attr-defined]
         q = [msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w]
         r = Rotation.from_quat(q).as_matrix()
         t = np.array([msg.x, msg.y, msg.z])
@@ -149,8 +149,8 @@ def main() -> None:
             last_r, last_t, last_ts = r, t, msg.ts or time.time()
             has_odom = True
 
-    def on_scan(channel, data):
-        msg = PointCloud2.decode(data)
+    def on_scan(channel: str, data: bytes) -> None:  # type: ignore[misc]
+        msg = PointCloud2.decode(data)  # type: ignore[attr-defined]
         pts, _ = msg.as_numpy()
         if len(pts) == 0:
             return
@@ -176,7 +176,7 @@ def main() -> None:
                     child_frame_id="sensor",
                     pose=Pose(position=list(t_c), orientation=list(q_c)),
                 )
-                lc.publish(args.corrected_odom, odom_out.encode())
+                lc.publish(args.corrected_odom, odom_out.encode())  # type: ignore[attr-defined]
 
     lc.subscribe(args.odom, on_odom)
     lc.subscribe(args.registered_scan, on_scan)
@@ -184,7 +184,7 @@ def main() -> None:
     # Map publish thread
     stop_event = threading.Event()
 
-    def map_loop():
+    def map_loop() -> None:
         interval = 1.0 / cfg.map_publish_rate if cfg.map_publish_rate > 0 else 2.0
         last_pub = 0.0
         while not stop_event.is_set():
@@ -197,7 +197,7 @@ def main() -> None:
                         cloud = core.build_global_map()
                     if len(cloud) > 0:
                         pc = PointCloud2.from_numpy(cloud, frame_id="map", timestamp=now)
-                        lc.publish(args.global_map, pc.encode())
+                        lc.publish(args.global_map, pc.encode())  # type: ignore[attr-defined]
                 last_pub = now
             time.sleep(0.05)
 
