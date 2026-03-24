@@ -188,3 +188,149 @@ class TestTSDFMapRangeFilter:
             assert len(m._voxels) > 0
         finally:
             m.stop()
+
+
+# ---------------------------------------------------------------------------
+# E2E Behavioural Tests (marked slow)
+# ---------------------------------------------------------------------------
+
+
+class _E2EMockTransport:
+    """In-process pub/sub stub for E2E tests."""
+
+    def __init__(self) -> None:
+        self._messages: list = []
+        self._subscribers: list = []
+
+    def publish(self, msg) -> None:  # type: ignore[no-untyped-def]
+        self._messages.append(msg)
+        for cb in self._subscribers:
+            cb(msg)
+
+    def broadcast(self, _s, msg) -> None:  # type: ignore[no-untyped-def]
+        self.publish(msg)
+
+    def subscribe(self, cb, *_a):  # type: ignore[no-untyped-def]
+        self._subscribers.append(cb)
+        return lambda: self._subscribers.remove(cb)
+
+    @property
+    def last(self):  # type: ignore[no-untyped-def]
+        return self._messages[-1] if self._messages else None
+
+
+def _e2e_wire(module: TSDFMap) -> dict:  # type: ignore[no-untyped-def, type-arg]
+    transports = {}
+    for name in ("registered_scan", "raw_odom", "global_map", "odom"):
+        t = _E2EMockTransport()
+        stream = getattr(module, name)
+        if stream is not None:
+            stream._transport = t
+        transports[name] = t
+    return transports
+
+
+def _e2e_pose(x: float = 0.0, y: float = 0.0, z: float = 0.0):  # type: ignore[no-untyped-def]
+    import time as _time
+
+    from dimos.msgs.geometry_msgs.PoseStamped import PoseStamped
+
+    return PoseStamped(
+        ts=_time.time(), frame_id="world", position=[x, y, z], orientation=[0.0, 0.0, 0.0, 1.0]
+    )
+
+
+def _e2e_scan(points: np.ndarray, frame_id: str = "world"):  # type: ignore[no-untyped-def]
+    from dimos.msgs.sensor_msgs.PointCloud2 import PointCloud2
+
+    return PointCloud2.from_numpy(points.astype(np.float32), frame_id=frame_id)
+
+
+def _wall_at_x(x: float, n_pts: int = 25) -> np.ndarray:
+    ys = np.linspace(-1.0, 1.0, n_pts)
+    return np.column_stack([np.full(n_pts, x), ys, np.zeros(n_pts)])
+
+
+@pytest.mark.slow
+class TestTSDFMapE2E:
+    """Behavioural E2E tests - inject mock messages, observe global_map."""
+
+    @pytest.fixture
+    def m(self):  # type: ignore[no-untyped-def]
+        mod = TSDFMap(
+            voxel_size=0.2,
+            sdf_trunc=3.0,
+            max_range=15.0,
+            map_publish_rate=0.5,
+            max_weight=16.0,
+            key_trans=0.0,
+        )
+        ts = _e2e_wire(mod)
+        yield mod, ts
+        mod.stop()
+
+    def test_scan_produces_occupied_voxels(self, m) -> None:  # type: ignore[no-untyped-def]
+        """Integrating a single scan must produce occupied voxels in global_map."""
+        mod, ts = m
+        mod._on_odom(_e2e_pose(0, 0, 0))
+        mod._on_scan(_e2e_scan(_wall_at_x(3.0)))
+        mod._publish_map()
+        assert len(ts["global_map"]._messages) >= 1, "global_map was not published"
+        from dimos.msgs.sensor_msgs.PointCloud2 import PointCloud2
+
+        pc: PointCloud2 = ts["global_map"].last
+        pts_np, _ = pc.as_numpy()
+        assert len(pts_np) > 0, "global_map should contain occupied voxels"
+        print(f"\n[E2E] Single scan: {len(pts_np)} occupied voxels published")
+
+    def test_dynamic_obstacle_clearing(self, m) -> None:  # type: ignore[no-untyped-def]
+        """On-axis obstacle at x=1 shifts to free-space SDF after obstacle moves to x=3."""
+        mod, ts = m
+        mod._on_odom(_e2e_pose(0, 0, 0))
+
+        # Phase 1: obstacle at x=1
+        for _ in range(5):
+            mod._on_scan(_e2e_scan(np.array([[1.0, 0.0, 0.0]])))
+
+        vs = mod.config.voxel_size
+        vk1 = (int(1.0 / vs), 0, 0)
+        assert vk1 in mod._voxels
+        sdf_before, _ = mod._voxels[vk1]
+        print(f"\n[E2E] Phase 1 - voxel {vk1}: sdf={sdf_before:.4f}")
+        assert abs(sdf_before) < mod.config.sdf_trunc
+
+        # Phase 2: obstacle moves to x=3
+        n_clear = int(mod.config.max_weight * 3)
+        for _ in range(n_clear):
+            mod._on_scan(_e2e_scan(np.array([[3.0, 0.0, 0.0]])))
+
+        sdf_after, _ = mod._voxels[vk1]
+        print(f"[E2E] Phase 2 - voxel {vk1}: sdf={sdf_after:.4f}")
+        assert sdf_after > sdf_before, (
+            f"Expected SDF at x=1 to increase after obstacle moved; "
+            f"{sdf_before:.4f} -> {sdf_after:.4f}"
+        )
+
+    def test_odom_passthrough_e2e(self, m) -> None:  # type: ignore[no-untyped-def]
+        """raw_odom messages should be forwarded on the odom output stream."""
+        mod, ts = m
+        mod._on_odom(_e2e_pose(1.5, 2.5, 0.1))
+        assert len(ts["odom"]._messages) == 1
+        pose_out = ts["odom"]._messages[0]
+        assert pose_out.x == pytest.approx(1.5)
+        assert pose_out.y == pytest.approx(2.5)
+
+    def test_multiple_scans_accumulate(self, m) -> None:  # type: ignore[no-untyped-def]
+        """Multiple scans should accumulate voxels."""
+        mod, ts = m
+        mod._on_odom(_e2e_pose(0, 0, 0))
+        for _ in range(5):
+            pts = np.array([[2.0, y, 0.0] for y in np.linspace(-1, 1, 10)])
+            mod._on_scan(_e2e_scan(pts))
+        voxel_count = len(mod._voxels)
+        print(f"\n[E2E] After 5 scans: {voxel_count} voxels in TSDF")
+        assert voxel_count > 0
+        mod._publish_map()
+        if ts["global_map"].last is not None:
+            pts_np, _ = ts["global_map"].last.as_numpy()
+            print(f"[E2E] Occupied voxels published: {len(pts_np)}")

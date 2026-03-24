@@ -29,6 +29,7 @@ import time
 from typing import Any
 
 import numpy as np
+from reactivex.disposable import Disposable
 
 from dimos.core.core import rpc
 from dimos.core.module import Module, ModuleConfig
@@ -47,7 +48,7 @@ class TSDFMapConfig(ModuleConfig):
     """Voxel edge length in metres."""
 
     sdf_trunc: float = 0.3
-    """Truncation distance. Controls clearing range. Typically 2-3× voxel_size."""
+    """Truncation distance. Controls clearing range. Typically 2-3x voxel_size."""
 
     max_range: float = 15.0
     """Ignore points beyond this distance from sensor."""
@@ -85,17 +86,33 @@ class TSDFMap(Module["TSDFMapConfig"]):
         self._running = threading.Event()
         self._publish_thread: threading.Thread | None = None
 
-    def __getstate__(self):  # type: ignore[no-untyped-def]
+    def __getstate__(self):  # type: ignore[no-untyped-def, override]
         """Exclude unpicklable threading primitives for worker deployment."""
-        state = super().__getstate__()
+        state = self.__dict__.copy()
+        # Remove unpicklable threading primitives
         state.pop("_lock", None)
         state.pop("_running", None)
         state.pop("_publish_thread", None)
+        # Also apply base class exclusions
+        state.pop("_disposables", None)
+        state.pop("_module_closed_lock", None)
+        state.pop("_loop", None)
+        state.pop("_loop_thread", None)
+        state.pop("_rpc", None)
+        state.pop("_tf", None)
         return state
 
-    def __setstate__(self, state) -> None:  # type: ignore[no-untyped-def]
+    def __setstate__(self, state) -> None:  # type: ignore[no-untyped-def, override]
         """Restore from pickled state and reinitialise threading primitives."""
-        super().__setstate__(state)
+        from reactivex.disposable import CompositeDisposable
+
+        self.__dict__.update(state)
+        self._disposables = CompositeDisposable()
+        self._module_closed_lock = threading.Lock()
+        self._loop = None
+        self._loop_thread = None
+        self._rpc = None
+        self._tf = None
         self._lock = threading.Lock()
         self._running = threading.Event()
         self._publish_thread = None
@@ -103,8 +120,8 @@ class TSDFMap(Module["TSDFMapConfig"]):
     @rpc
     def start(self) -> None:
         super().start()
-        self._disposables.add(self.raw_odom.subscribe(self._on_odom))
-        self._disposables.add(self.registered_scan.subscribe(self._on_scan))
+        self._disposables.add(Disposable(self.raw_odom.subscribe(self._on_odom)))
+        self._disposables.add(Disposable(self.registered_scan.subscribe(self._on_scan)))
         self._running.set()
         self._publish_thread = threading.Thread(target=self._publish_loop, daemon=True)
         self._publish_thread.start()
@@ -165,7 +182,7 @@ class TSDFMap(Module["TSDFMapConfig"]):
 
         for pt in points:
             ray = pt - origin
-            ray_len = np.linalg.norm(ray)
+            ray_len = float(np.linalg.norm(ray))
             if ray_len < 1e-6:
                 continue
             ray_dir = ray / ray_len
