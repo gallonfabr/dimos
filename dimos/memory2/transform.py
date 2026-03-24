@@ -105,6 +105,23 @@ class Batch(Transformer[T, R]):
                 yield o.derive(data=r)
 
 
+def stride(n: int) -> Callable[[Iterator[Observation[T]]], Iterator[Observation[T]]]:
+    """Yield every *n*-th observation, skipping the rest."""
+
+    def _stride(upstream: Iterator[Observation[T]]) -> Iterator[Observation[T]]:
+        for i, obs in enumerate(upstream):
+            if i % n == 0:
+                yield obs
+
+    return _stride
+
+
+every_nth = stride
+
+
+every_nth = stride
+
+
 class QualityWindow(Transformer[T, T]):
     """Keeps the highest-quality item per time window.
 

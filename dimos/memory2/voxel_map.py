@@ -1,0 +1,71 @@
+# Copyright 2026 Dimensional Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from dimos.mapping.voxels import VoxelGrid
+from dimos.memory2.transform import Transformer
+from dimos.msgs.sensor_msgs.PointCloud2 import PointCloud2
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from dimos.memory2.type.observation import Observation
+
+
+class VoxelMap(Transformer[PointCloud2, PointCloud2]):
+    """Accumulate PointCloud2 observations into a global voxel map.
+
+    Assumes input clouds are already in world frame (same as VoxelGridMapper).
+    Yields the accumulated global map when upstream exhausts.
+    """
+
+    def __init__(
+        self,
+        *,
+        voxel_size: float = 0.05,
+        block_count: int = 2_000_000,
+        device: str = "CUDA:0",
+        carve_columns: bool = True,
+    ) -> None:
+        self.voxel_size = voxel_size
+        self.block_count = block_count
+        self.device = device
+        self.carve_columns = carve_columns
+
+    def __call__(
+        self, upstream: Iterator[Observation[PointCloud2]]
+    ) -> Iterator[Observation[PointCloud2]]:
+        grid = VoxelGrid(
+            voxel_size=self.voxel_size,
+            block_count=self.block_count,
+            device=self.device,
+            carve_columns=self.carve_columns,
+        )
+        last_obs: Observation[PointCloud2] | None = None
+        count = 0
+
+        for obs in upstream:
+            grid.add_frame(obs.data)
+            last_obs = obs
+            count += 1
+
+        if last_obs is not None:
+            yield last_obs.derive(
+                data=grid.get_global_pointcloud2(),
+                pose=None,
+                tags={**last_obs.tags, "frame_count": count},
+            )

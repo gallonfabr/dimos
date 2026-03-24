@@ -22,9 +22,11 @@ import pytest
 
 from dimos.memory2.store.sqlite import SqliteStore
 from dimos.memory2.transform import Batch, QualityWindow
+from dimos.memory2.voxel_map import VoxelMap
 from dimos.models.embedding.clip import CLIPModel
 from dimos.models.vl.florence import Florence2Model
 from dimos.msgs.sensor_msgs.Image import Image
+from dimos.msgs.sensor_msgs.PointCloud2 import PointCloud2
 from dimos.utils.data import get_data_dir
 
 if TYPE_CHECKING:
@@ -145,3 +147,13 @@ class TestVisualizer:
 
             for obs in pipeline:
                 print(obs.ts, obs.data)
+
+    def test_build_global_map(self, store: SqliteStore) -> None:
+        """Build a global voxel map from all lidar frames."""
+        lidar = store.stream("lidar", PointCloud2)
+        n_frames = lidar.count()
+        print(f"\nLidar frames: {n_frames}")
+
+        result = lidar.transform(VoxelMap(voxel_size=0.05)).first()
+        global_map = result.data
+        print(f"Global map: {len(global_map)} voxels from {result.tags['frame_count']} frames")

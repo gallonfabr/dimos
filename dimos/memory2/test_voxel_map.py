@@ -1,0 +1,134 @@
+# Copyright 2026 Dimensional Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from __future__ import annotations
+
+import time
+from typing import TYPE_CHECKING
+
+import numpy as np
+import pytest
+
+from dimos.memory2.store.sqlite import SqliteStore
+from dimos.memory2.type.observation import Observation
+from dimos.memory2.voxel_map import VoxelMap
+from dimos.msgs.sensor_msgs.PointCloud2 import PointCloud2
+from dimos.utils.data import get_data_dir
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+DB_PATH = get_data_dir() / "go2_bigoffice.db"
+
+
+def _make_obs(obs_id: int, points: np.ndarray, ts: float = 0.0) -> Observation[PointCloud2]:
+    return Observation(id=obs_id, ts=ts, _data=PointCloud2.from_numpy(points))
+
+
+def _unit_cube_points(n: int = 100) -> np.ndarray:
+    rng = np.random.default_rng(42)
+    return rng.random((n, 3)).astype(np.float32)
+
+
+def test_accumulate_two_frames() -> None:
+    """Two non-overlapping frames produce a larger global map."""
+    pts = _unit_cube_points(50)
+    obs1 = _make_obs(0, pts, ts=1.0)
+    obs2 = _make_obs(1, pts + 10.0, ts=2.0)  # offset by 10m, no overlap
+
+    xf = VoxelMap(voxel_size=0.5, carve_columns=False)
+    results = list(xf(iter([obs1, obs2])))
+
+    assert len(results) == 1
+    global_map = results[0].data
+
+    single_results = list(VoxelMap(voxel_size=0.5)(iter([obs1])))
+    assert len(global_map) > len(single_results[0].data)
+
+
+def test_empty_stream() -> None:
+    xf = VoxelMap(voxel_size=0.5)
+    assert list(xf(iter([]))) == []
+
+
+def test_frame_count_tag() -> None:
+    pts = _unit_cube_points(30)
+    obs = [_make_obs(i, pts, ts=float(i)) for i in range(5)]
+
+    xf = VoxelMap(voxel_size=0.5, device="CPU:0")
+    results = list(xf(iter(obs)))
+
+    assert len(results) == 1
+    assert results[0].tags["frame_count"] == 5
+
+
+# -- Integration tests against real replay data --
+
+
+@pytest.fixture(scope="module")
+def store() -> Iterator[SqliteStore]:
+    db = SqliteStore(path=str(DB_PATH))
+    with db:
+        yield db
+
+
+@pytest.mark.tool
+class TestVoxelMapReplay:
+    """Build a global voxel map from real LiDAR frames in go2_bigoffice.db."""
+
+    def test_build_global_map(self, store: SqliteStore) -> None:
+        t_total = time.perf_counter()
+
+        lidar = store.stream("lidar", PointCloud2)
+        n_frames = lidar.count()
+
+        t0 = time.perf_counter()
+        result = lidar.transform(VoxelMap(voxel_size=0.05)).last()
+        t_transform = time.perf_counter() - t0
+
+        t_total = time.perf_counter() - t_total
+
+        global_map = result.data
+        frame_count = result.tags["frame_count"]
+
+        assert frame_count == n_frames
+        assert len(global_map) > 0
+
+        print(
+            lidar.summary(),
+            f"\n{frame_count} frames -> {len(global_map)} voxels"
+            f"\n  transform: {t_transform:.2f}s ({t_transform / frame_count * 1000:.1f}ms/frame)"
+            f"\n  total wall: {t_total:.2f}s",
+        )
+
+    def test_subset_fewer_voxels_than_full(self, store: SqliteStore) -> None:
+        """First 100 frames should produce fewer voxels than the full dataset."""
+        lidar = store.stream("lidar", PointCloud2)
+
+        subset = lidar.transform(VoxelMap(voxel_size=0.05)).first()
+        # compare against a smaller slice
+        small = lidar.limit(100).transform(VoxelMap(voxel_size=0.05)).first()
+
+        assert small.tags["frame_count"] == 100
+        assert len(small.data) < len(subset.data)
+
+    def test_coarse_vs_fine_resolution(self, store: SqliteStore) -> None:
+        """Coarser voxel size should produce fewer voxels."""
+        lidar = store.stream("lidar", PointCloud2).limit(200)
+
+        fine = lidar.transform(VoxelMap(voxel_size=0.05)).first()
+        coarse = lidar.transform(VoxelMap(voxel_size=0.20)).first()
+
+        assert len(coarse.data) < len(fine.data)
+        print(f"\nfine(0.05): {len(fine.data)} voxels, coarse(0.20): {len(coarse.data)} voxels")

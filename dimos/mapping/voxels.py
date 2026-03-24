@@ -33,6 +33,134 @@ from dimos.utils.reactive import backpressure
 logger = setup_logger()
 
 
+class VoxelGrid:
+    """Pure voxel grid accumulator using Open3D VoxelBlockGrid.
+
+    No Module/framework dependency. Can be used standalone or wrapped
+    by VoxelGridMapper (Module) or VoxelMap (memory2 Transformer).
+    """
+
+    def __init__(
+        self,
+        voxel_size: float = 0.05,
+        block_count: int = 2_000_000,
+        device: str = "CUDA:0",
+        carve_columns: bool = True,
+        frame_id: str = "world",
+    ) -> None:
+        self.voxel_size = voxel_size
+        self.carve_columns = carve_columns
+        self.frame_id = frame_id
+
+        dev = (
+            o3c.Device(device)
+            if (device.startswith("CUDA") and o3c.cuda.is_available())
+            else o3c.Device("CPU:0")
+        )
+
+        logger.info(f"VoxelGrid using device: {dev}")
+
+        self.vbg = o3d.t.geometry.VoxelBlockGrid(
+            attr_names=("dummy",),
+            attr_dtypes=(o3c.uint8,),
+            attr_channels=(o3c.SizeVector([1]),),
+            voxel_size=voxel_size,
+            block_resolution=1,
+            block_count=block_count,
+            device=dev,
+        )
+
+        self._dev = dev
+        self._voxel_hashmap = self.vbg.hashmap()
+        self._key_dtype = self._voxel_hashmap.key_tensor().dtype
+        self._latest_frame_ts: float = 0.0
+
+    def add_frame(self, frame: PointCloud2) -> None:
+        if hasattr(frame, "ts") and frame.ts:
+            self._latest_frame_ts = frame.ts
+
+        pcd = ensure_tensor_pcd(frame.pointcloud, self._dev)
+
+        if pcd.is_empty():
+            return
+
+        pts = pcd.point["positions"].to(self._dev, o3c.float32)
+        vox = (pts / self.voxel_size).floor().to(self._key_dtype)
+        keys_Nx3 = vox.contiguous()
+
+        if self.carve_columns:
+            self._carve_and_insert(keys_Nx3)
+        else:
+            self._voxel_hashmap.activate(keys_Nx3)
+
+        self.get_global_pointcloud.invalidate_cache(self)  # type: ignore[attr-defined]
+        self.get_global_pointcloud2.invalidate_cache(self)  # type: ignore[attr-defined]
+
+    def _carve_and_insert(self, new_keys: o3c.Tensor) -> None:
+        """Column carving: remove all existing voxels sharing (X,Y) with new_keys, then insert."""
+        if new_keys.shape[0] == 0:
+            self._voxel_hashmap.activate(new_keys)
+            return
+
+        xy_keys = new_keys[:, :2].contiguous()
+
+        xy_hashmap = o3c.HashMap(
+            init_capacity=xy_keys.shape[0],
+            key_dtype=self._key_dtype,
+            key_element_shape=o3c.SizeVector([2]),
+            value_dtypes=[o3c.uint8],
+            value_element_shapes=[o3c.SizeVector([1])],
+            device=self._dev,
+        )
+        dummy_vals = o3c.Tensor.zeros((xy_keys.shape[0], 1), o3c.uint8, self._dev)
+        xy_hashmap.insert(xy_keys, dummy_vals)
+
+        active_indices = self._voxel_hashmap.active_buf_indices()
+        if active_indices.shape[0] == 0:
+            self._voxel_hashmap.activate(new_keys)
+            return
+
+        existing_keys = self._voxel_hashmap.key_tensor()[active_indices]
+        existing_xy = existing_keys[:, :2].contiguous()
+
+        _, found_mask = xy_hashmap.find(existing_xy)
+
+        to_erase = existing_keys[found_mask]
+        if to_erase.shape[0] > 0:
+            self._voxel_hashmap.erase(to_erase)
+
+        self._voxel_hashmap.activate(new_keys)
+
+    @simple_mcache
+    def get_global_pointcloud2(self) -> PointCloud2:
+        return PointCloud2(
+            ensure_legacy_pcd(self.get_global_pointcloud()),
+            frame_id=self.frame_id,
+            ts=self._latest_frame_ts if self._latest_frame_ts else time.time(),
+        )
+
+    @simple_mcache
+    def get_global_pointcloud(self) -> o3d.t.geometry.PointCloud:
+        voxel_coords, _ = self.vbg.voxel_coordinates_and_flattened_indices()
+        pts = voxel_coords + (self.voxel_size * 0.5)
+        out = o3d.t.geometry.PointCloud(device=self._dev)
+        out.point["positions"] = pts
+        return out
+
+    def size(self) -> int:
+        return self._voxel_hashmap.size()  # type: ignore[no-any-return]
+
+    def __len__(self) -> int:
+        return self.size()
+
+    def clear(self) -> None:
+        """Free GPU resources."""
+        self.get_global_pointcloud.invalidate_cache(self)  # type: ignore[attr-defined]
+        self.get_global_pointcloud2.invalidate_cache(self)  # type: ignore[attr-defined]
+        self.vbg = None  # type: ignore[assignment]
+        self._voxel_hashmap = None  # type: ignore[assignment]
+
+
 class Config(ModuleConfig):
     frame_id: str = "world"
     # -1 never publishes, 0 publishes on every frame, >0 publishes at interval in seconds
@@ -51,29 +179,13 @@ class VoxelGridMapper(Module[Config]):
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-
-        dev = (
-            o3c.Device(self.config.device)
-            if (self.config.device.startswith("CUDA") and o3c.cuda.is_available())
-            else o3c.Device("CPU:0")
-        )
-
-        logger.info(f"VoxelGridMapper using device: {dev}")
-
-        self.vbg = o3d.t.geometry.VoxelBlockGrid(
-            attr_names=("dummy",),
-            attr_dtypes=(o3c.uint8,),
-            attr_channels=(o3c.SizeVector([1]),),
+        self._grid = VoxelGrid(
             voxel_size=self.config.voxel_size,
-            block_resolution=1,
             block_count=self.config.block_count,
-            device=dev,
+            device=self.config.device,
+            carve_columns=self.config.carve_columns,
+            frame_id=self.frame_id,
         )
-
-        self._dev = dev
-        self._voxel_hashmap = self.vbg.hashmap()
-        self._key_dtype = self._voxel_hashmap.key_tensor().dtype
-        self._latest_frame_ts: float = 0.0
 
     @rpc
     def start(self) -> None:
@@ -101,11 +213,7 @@ class VoxelGridMapper(Module[Config]):
     @rpc
     def stop(self) -> None:
         super().stop()
-        # Free tensor-tracked objects eagerly so Open3D does not report them as leaks.
-        self.get_global_pointcloud.invalidate_cache(self)
-        self.get_global_pointcloud2.invalidate_cache(self)
-        self.vbg = None
-        self._voxel_hashmap = None
+        self._grid.clear()
 
     def _on_frame(self, frame: PointCloud2) -> None:
         self.add_frame(frame)
@@ -116,95 +224,20 @@ class VoxelGridMapper(Module[Config]):
         pc = self.get_global_pointcloud2()
         self.global_map.publish(pc)
 
+    def add_frame(self, frame: PointCloud2) -> None:
+        self._grid.add_frame(frame)
+
+    def get_global_pointcloud2(self) -> PointCloud2:
+        return self._grid.get_global_pointcloud2()
+
+    def get_global_pointcloud(self) -> o3d.t.geometry.PointCloud:
+        return self._grid.get_global_pointcloud()
+
     def size(self) -> int:
-        return self._voxel_hashmap.size()  # type: ignore[no-any-return]
+        return self._grid.size()
 
     def __len__(self) -> int:
         return self.size()
-
-    # @timed()  # TODO: fix thread leak in timed decorator
-    def add_frame(self, frame: PointCloud2) -> None:
-        # Track latest frame timestamp for proper latency measurement
-        if hasattr(frame, "ts") and frame.ts:
-            self._latest_frame_ts = frame.ts
-
-        # we are potentially moving into CUDA here
-        pcd = ensure_tensor_pcd(frame.pointcloud, self._dev)
-
-        if pcd.is_empty():
-            return
-
-        pts = pcd.point["positions"].to(self._dev, o3c.float32)
-        vox = (pts / self.config.voxel_size).floor().to(self._key_dtype)
-        keys_Nx3 = vox.contiguous()
-
-        if self.config.carve_columns:
-            self._carve_and_insert(keys_Nx3)
-        else:
-            self._voxel_hashmap.activate(keys_Nx3)
-
-        self.get_global_pointcloud.invalidate_cache(self)  # type: ignore[attr-defined]
-        self.get_global_pointcloud2.invalidate_cache(self)  # type: ignore[attr-defined]
-
-    def _carve_and_insert(self, new_keys: o3c.Tensor) -> None:
-        """Column carving: remove all existing voxels sharing (X,Y) with new_keys, then insert."""
-        if new_keys.shape[0] == 0:
-            self._voxel_hashmap.activate(new_keys)
-            return
-
-        # Extract (X, Y) from incoming keys
-        xy_keys = new_keys[:, :2].contiguous()
-
-        # Build temp hashmap for O(1) (X,Y) membership lookup
-        xy_hashmap = o3c.HashMap(
-            init_capacity=xy_keys.shape[0],
-            key_dtype=self._key_dtype,
-            key_element_shape=o3c.SizeVector([2]),
-            value_dtypes=[o3c.uint8],
-            value_element_shapes=[o3c.SizeVector([1])],
-            device=self._dev,
-        )
-        dummy_vals = o3c.Tensor.zeros((xy_keys.shape[0], 1), o3c.uint8, self._dev)
-        xy_hashmap.insert(xy_keys, dummy_vals)
-
-        # Get existing keys from main hashmap
-        active_indices = self._voxel_hashmap.active_buf_indices()
-        if active_indices.shape[0] == 0:
-            self._voxel_hashmap.activate(new_keys)
-            return
-
-        existing_keys = self._voxel_hashmap.key_tensor()[active_indices]
-        existing_xy = existing_keys[:, :2].contiguous()
-
-        # Find which existing keys have (X,Y) in the incoming set
-        _, found_mask = xy_hashmap.find(existing_xy)
-
-        # Erase those columns
-        to_erase = existing_keys[found_mask]
-        if to_erase.shape[0] > 0:
-            self._voxel_hashmap.erase(to_erase)
-
-        # Insert new keys
-        self._voxel_hashmap.activate(new_keys)
-
-    # returns PointCloud2 message (ready to send off down the pipeline)
-    @simple_mcache
-    def get_global_pointcloud2(self) -> PointCloud2:
-        return PointCloud2(
-            # we are potentially moving out of CUDA here
-            ensure_legacy_pcd(self.get_global_pointcloud()),
-            frame_id=self.frame_id,
-            ts=self._latest_frame_ts if self._latest_frame_ts else time.time(),
-        )
-
-    @simple_mcache
-    # @timed()
-    def get_global_pointcloud(self) -> o3d.t.geometry.PointCloud:
-        voxel_coords, _ = self.vbg.voxel_coordinates_and_flattened_indices()
-        pts = voxel_coords + (self.config.voxel_size * 0.5)
-        out = o3d.t.geometry.PointCloud(device=self._dev)
-        out.point["positions"] = pts
-        return out
 
 
 def ensure_tensor_pcd(
