@@ -45,12 +45,12 @@ if TYPE_CHECKING:
 
 logger = setup_logger()
 
-DOCKER_RUN_TIMEOUT = 120  #     Timeout for `docker run` command execution
+DOCKER_RUN_TIMEOUT = 120  # Timeout for `docker run` command execution
 DOCKER_PULL_TIMEOUT_DEFAULT = None  # No timeout for `docker pull` (images can be large)
-DOCKER_CMD_TIMEOUT = 20  #       Timeout for quick Docker commands (inspect, rm, logs)
-DOCKER_STATUS_TIMEOUT = 10  #    Timeout for container status checks
-DOCKER_STOP_TIMEOUT = 30  #      Timeout for `docker stop` command (graceful shutdown)
-LOG_TAIL_LINES = 200  #          Number of log lines to include in error messages
+DOCKER_CMD_TIMEOUT = 20  # Timeout for quick Docker commands (inspect, rm, logs)
+DOCKER_STATUS_TIMEOUT = 10  # Timeout for container status checks
+DOCKER_STOP_TIMEOUT = 30  # Timeout for `docker stop` command (graceful shutdown)
+LOG_TAIL_LINES = 200  # Number of log lines to include in error messages
 
 
 class DockerModuleConfig(ModuleConfig):
@@ -514,10 +514,6 @@ class DockerModuleOuter(ModuleProxyProtocol):
         )
 
 
-# Backwards compatibility alias
-DockerModule = DockerModuleOuter
-
-
 class DockerModuleInner:
     """Runs a module inside Docker container. Blocks until SIGTERM/SIGINT."""
 
@@ -747,7 +743,6 @@ if __name__ == "__main__":
 
 __all__ = [
     "DIMOS_FOOTER",
-    "DockerModule",
     "DockerModuleConfig",
     "DockerModuleInner",
     "DockerModuleOuter",
