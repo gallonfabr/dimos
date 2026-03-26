@@ -509,3 +509,39 @@ def safe_thread_map(
         raise ExceptionGroup("safe_thread_map failed", errors)
 
     return [outcomes[i] for i in range(len(items))]  # type: ignore[misc]
+
+
+def thread_start(
+    module: "ModuleBase[Any]",
+    *,
+    close_timeout: float = 2.0,
+    **thread_kwargs: Any,
+) -> ModuleThread:
+    """Create a :class:`ModuleThread`, start it immediately, and return it.
+
+    Convenience wrapper equivalent to::
+
+        t = ModuleThread(module, close_timeout=close_timeout, **thread_kwargs)
+        t.start()
+        return t
+
+    Accepts the same arguments as :class:`ModuleThread`.
+
+    Example::
+
+        class MyModule(Module):
+            @rpc
+            def start(self) -> None:
+                self._worker = thread_start(
+                    self,
+                    target=self._run_loop,
+                    name="my-worker",
+                )
+
+            def _run_loop(self) -> None:
+                while self._worker.status.get() == "running":
+                    do_work()
+    """
+    t = ModuleThread(module, close_timeout=close_timeout, **thread_kwargs)
+    t.start()
+    return t

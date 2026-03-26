@@ -126,9 +126,6 @@ class ModuleBase(Configurable[ModuleConfigT], Resource):
 
     @rpc
     def stop(self) -> None:
-        self._stop()
-
-    def _stop(self) -> None:
         with self.mod_state as state:
             if state == "stopped":
                 return
