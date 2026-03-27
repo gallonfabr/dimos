@@ -50,9 +50,7 @@ class ListObservationStore(ObservationStore[T]):
         super().__init__(**kwargs)
         self._name = self.config.name
         max_size = self.config.max_size
-        self._observations: deque[Observation[T]] = deque(
-            maxlen=max_size if max_size is not None else None
-        )
+        self._observations: deque[Observation[T]] = deque(maxlen=max_size)
         self._next_id = 0
         self._lock = threading.Lock()
 

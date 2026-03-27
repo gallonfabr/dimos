@@ -68,6 +68,7 @@ class StreamModule(Module[ModuleConfigT]):
 
         store = self.register_disposable(NullStore())
         store.start()
+
         stream: Stream[Any] = store.stream(in_name, inp_port.type)
 
         # we push input into the stream

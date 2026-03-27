@@ -52,9 +52,9 @@ class VoxelGrid:
         carve_columns: bool = True,
         frame_id: str = "world",
     ) -> None:
-        self.voxel_size = voxel_size
-        self.carve_columns = carve_columns
-        self.frame_id = frame_id
+        self._voxel_size = voxel_size
+        self._carve_columns = carve_columns
+        self._frame_id = frame_id
 
         dev = (
             o3c.Device(device)
@@ -64,7 +64,7 @@ class VoxelGrid:
 
         logger.info(f"VoxelGrid using device: {dev}")
 
-        self.vbg = o3d.t.geometry.VoxelBlockGrid(
+        self.vbg: o3d.t.geometry.VoxelBlockGrid | None = o3d.t.geometry.VoxelBlockGrid(
             attr_names=("dummy",),
             attr_dtypes=(o3c.uint8,),
             attr_channels=(o3c.SizeVector([1]),),
@@ -95,10 +95,10 @@ class VoxelGrid:
             return
 
         pts = pcd.point["positions"].to(self._dev, o3c.float32)
-        vox = (pts / self.voxel_size).floor().to(self._key_dtype)
+        vox = (pts / self._voxel_size).floor().to(self._key_dtype)
         keys_Nx3 = vox.contiguous()
 
-        if self.carve_columns:
+        if self._carve_columns:
             self._carve_and_insert(keys_Nx3)
         else:
             self._voxel_hashmap.activate(keys_Nx3)
@@ -146,15 +146,16 @@ class VoxelGrid:
         self._check_disposed()
         return PointCloud2(
             ensure_legacy_pcd(self.get_global_pointcloud()),
-            frame_id=self.frame_id,
+            frame_id=self._frame_id,
             ts=self._latest_frame_ts if self._latest_frame_ts else time.time(),
         )
 
     @simple_mcache
     def get_global_pointcloud(self) -> o3d.t.geometry.PointCloud:
         self._check_disposed()
+        assert self.vbg is not None
         voxel_coords, _ = self.vbg.voxel_coordinates_and_flattened_indices()
-        pts = voxel_coords + (self.voxel_size * 0.5)
+        pts = voxel_coords + (self._voxel_size * 0.5)
         out = o3d.t.geometry.PointCloud(device=self._dev)
         out.point["positions"] = pts
         return out
@@ -173,8 +174,8 @@ class VoxelGrid:
         self._disposed = True
         self.get_global_pointcloud.invalidate_cache(self)  # type: ignore[attr-defined]
         self.get_global_pointcloud2.invalidate_cache(self)  # type: ignore[attr-defined]
-        self.vbg = None  # type: ignore[assignment]
-        self._voxel_hashmap = None  # type: ignore[assignment]
+        self.vbg = None
+        self._voxel_hashmap = None
 
 
 class VoxelMapTransformer(Transformer[PointCloud2, PointCloud2]):

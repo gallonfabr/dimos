@@ -15,15 +15,18 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+import threading
 
 import pytest
 
 from dimos.core.stream import In, Out
+from dimos.core.transport import pLCMTransport
 from dimos.memory2.module import StreamModule
 from dimos.memory2.store.memory import MemoryStore
 from dimos.memory2.stream import Stream
 from dimos.memory2.transform import FnTransformer, Transformer
 from dimos.memory2.type.observation import Observation
+from dimos.utils.threadpool import get_scheduler
 
 
 def test_unbound_stream_creation() -> None:
@@ -214,9 +217,6 @@ def test_stream_module_with_method_pipeline() -> None:
 
 def test_stream_module_runtime_wiring() -> None:
     """End-to-end: push data into In port, assert transformed data on Out port."""
-    import threading
-
-    from dimos.core.transport import pLCMTransport
 
     class Double(Transformer[int, int]):
         def __call__(self, upstream: Iterator[Observation[int]]) -> Iterator[Observation[int]]:
@@ -235,26 +235,15 @@ def test_stream_module_runtime_wiring() -> None:
     received: list[int] = []
     done = threading.Event()
 
-    # Subscribe before start so we don't miss the first message
     unsub = module.doubled.subscribe(lambda msg: (received.append(msg), done.set()))
 
     module.start()
-
-    import time
-
-    time.sleep(0.5)  # let live stream iterator spin up
-
-    # Push data through the In port's transport
-    module.numbers.transport.publish(42)
-
-    assert done.wait(timeout=5.0), f"Timed out, received={received}"
-
-    unsub()
-    module.stop()
-
-    # Shutdown the global RxPY thread pool so conftest thread-leak check passes
-    from dimos.utils.threadpool import get_scheduler
-
-    get_scheduler().executor.shutdown(wait=True)
-
-    assert received == [84]
+    try:
+        module.numbers.transport.publish(42)
+        assert done.wait(timeout=5.0), f"Timed out, received={received}"
+        assert received == [84]
+    finally:
+        unsub()
+        module.stop()
+        # Shutdown the global RxPY thread pool so conftest thread-leak check passes
+        get_scheduler().executor.shutdown(wait=True)

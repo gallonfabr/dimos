@@ -559,8 +559,10 @@ class TestStoreLifecycle:
         session.stop()
 
         # Both backends' disposables are disposed
-        assert backend1._disposables is None or backend1._disposables.is_disposed
-        assert backend2._disposables is None or backend2._disposables.is_disposed
+        assert backend1._disposables is not None
+        assert backend1._disposables.is_disposed
+        assert backend2._disposables is not None
+        assert backend2._disposables.is_disposed
 
     def test_backend_stop_stops_components(self, session: Store) -> None:
         """Backend.stop() propagates to metadata_store, blob_store, vector_store."""
@@ -571,6 +573,7 @@ class TestStoreLifecycle:
 
         session.stop()
 
-        # metadata_store should be stopped (CompositeResource._disposables disposed)
-        if hasattr(metadata_store, "_disposables") and metadata_store._disposables is not None:
+        # ListObservationStore has no child disposables, so _disposables stays None.
+        # For stores that do register disposables, verify they're disposed.
+        if metadata_store._disposables is not None:
             assert metadata_store._disposables.is_disposed

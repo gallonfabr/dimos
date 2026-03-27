@@ -14,8 +14,11 @@
 
 from __future__ import annotations
 
+import os
 import sqlite3
-from typing import Any
+from typing import Annotated, Any
+
+from pydantic import BeforeValidator
 
 from dimos.memory2.backend import Backend
 from dimos.memory2.blobstore.base import BlobStore
@@ -33,7 +36,9 @@ from dimos.memory2.vectorstore.sqlite import SqliteVectorStore
 class SqliteStoreConfig(StoreConfig):
     """Config for SQLite-backed store."""
 
-    path: str = "memory.db"
+    path: Annotated[
+        str, BeforeValidator(lambda v: os.fspath(v) if isinstance(v, os.PathLike) else v)
+    ] = "memory.db"
     page_size: int = 256
 
 

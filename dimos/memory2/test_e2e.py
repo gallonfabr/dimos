@@ -281,7 +281,6 @@ class TestE2EQuery:
         overlap_start = max(v_first, l_first)
         overlap_end = min(v_last, l_last)
         assert overlap_start < overlap_end, "Video and lidar should overlap in time"
-        assert overlap_start < overlap_end, "Video and lidar should overlap in time"
 
 
 @pytest.mark.tool

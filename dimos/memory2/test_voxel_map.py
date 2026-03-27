@@ -24,12 +24,17 @@ from dimos.mapping.voxels import VoxelMapTransformer
 from dimos.memory2.store.sqlite import SqliteStore
 from dimos.memory2.type.observation import Observation
 from dimos.msgs.sensor_msgs.PointCloud2 import PointCloud2
-from dimos.utils.data import get_data_dir
+from dimos.utils.data import get_data
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-DB_PATH = get_data_dir() / "go2_bigoffice.db"
+
+@pytest.fixture(scope="module")
+def store() -> Iterator[SqliteStore]:
+    db = SqliteStore(path=get_data("go2_bigoffice.db"))
+    with db:
+        yield db
 
 
 def _make_obs(obs_id: int, points: np.ndarray, ts: float = 0.0) -> Observation[PointCloud2]:
@@ -103,15 +108,8 @@ def test_emit_every_n() -> None:
 # -- Integration tests against real replay data --
 
 
-@pytest.fixture(scope="module")
-def store() -> Iterator[SqliteStore]:
-    db = SqliteStore(path=str(DB_PATH))
-    with db:
-        yield db
-
-
 @pytest.mark.tool
-def test_build_global_map(self, store: SqliteStore) -> None:
+def test_build_global_map(store: SqliteStore) -> None:
     t_total = time.perf_counter()
 
     lidar = store.stream("lidar", PointCloud2)

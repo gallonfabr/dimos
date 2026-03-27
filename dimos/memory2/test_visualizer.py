@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import pickle
 from typing import TYPE_CHECKING
 
 import pytest
@@ -24,8 +25,11 @@ from dimos.memory2.store.sqlite import SqliteStore
 from dimos.memory2.transform import Batch, QualityWindow
 from dimos.models.embedding.clip import CLIPModel
 from dimos.models.vl.florence import Florence2Model
+from dimos.models.vl.moondream import MoondreamVlModel
 from dimos.msgs.geometry_msgs.Transform import Transform
 from dimos.msgs.sensor_msgs.Image import Image
+from dimos.perception.detection.type.detection3d.pointcloud import Detection3DPC
+from dimos.robot.unitree.go2.connection import GO2Connection
 from dimos.utils.data import get_data, get_data_dir
 
 if TYPE_CHECKING:
@@ -106,8 +110,6 @@ class TestVisualizer:
     # VIS GOAL: draw 2d detections somehow, or project into 3d, draw 3d bounding boxes
     def test_detect_objects(self, store: SqliteStore, clip: CLIPModel) -> None:
         """CLIP pre-filter + VLM detection on top candidates."""
-        from dimos.models.vl.moondream import MoondreamVlModel
-
         vlm = MoondreamVlModel()
         embedded = store.streams.color_image_embedded
         lidar = store.streams.lidar
@@ -152,8 +154,6 @@ class TestVisualizer:
                 print(obs.ts, obs.data)
 
     def test_build_global_map(self, store: SqliteStore) -> None:
-        import pickle
-
         global_map = pickle.loads(get_data("unitree_go2_bigoffice_map.pickle").read_bytes())
         print(f"Global map: {len(global_map)}")
 
@@ -162,10 +162,6 @@ class TestVisualizer:
     # VIS GOAL: draw 2d detections somehow, or project into 3d, draw 3d bounding boxes
     def test_detect_objects_smart(self, store: SqliteStore, clip: CLIPModel) -> None:
         """CLIP pre-filter + VLM detection on top candidates."""
-        from dimos.models.vl.moondream import MoondreamVlModel
-        from dimos.perception.detection.type.detection3d.pointcloud import Detection3DPC
-        from dimos.robot.unitree.go2.connection import GO2Connection
-
         vlm = MoondreamVlModel()
         embedded = store.streams.color_image_embedded
         lidar = store.streams.lidar
