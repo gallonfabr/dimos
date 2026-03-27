@@ -12,10 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Grid tests for StreamModule — same e2e logic across all pipeline styles."""
+
 from __future__ import annotations
 
 from collections.abc import Iterator
 import threading
+
+import pytest
+from reactivex.scheduler import ThreadPoolScheduler
 
 from dimos.core.module import ModuleConfig
 from dimos.core.stream import In, Out
@@ -24,44 +29,67 @@ from dimos.memory2.module import StreamModule
 from dimos.memory2.stream import Stream
 from dimos.memory2.transform import Transformer
 from dimos.memory2.type.observation import Observation
-from dimos.utils.threadpool import get_scheduler
+
+# -- Shared transformer ---------------------------------------------------
 
 
-def test_stream_module_subclass_blueprint() -> None:
-    """StreamModule subclass creates a Blueprint with correct In/Out ports."""
+class Double(Transformer[int, int]):
+    def __init__(self, factor: int = 2) -> None:
+        self.factor = factor
 
-    class Identity(Transformer[str, str]):
-        def __call__(self, upstream: Iterator[Observation[str]]) -> Iterator[Observation[str]]:
-            yield from upstream
-
-    class MyModule(StreamModule):
-        pipeline = Stream().transform(Identity())
-        messages: In[str]
-        processed: Out[str]
-
-    bp = MyModule.blueprint()
-
-    assert len(bp.blueprints) == 1
-    atom = bp.blueprints[0]
-    stream_names = {s.name for s in atom.streams}
-    assert "messages" in stream_names
-    assert "processed" in stream_names
+    def __call__(self, upstream: Iterator[Observation[int]]) -> Iterator[Observation[int]]:
+        for obs in upstream:
+            yield obs.derive(data=obs.data * self.factor)
 
 
-def test_stream_module_with_transformer_pipeline() -> None:
-    """StreamModule accepts a bare Transformer as pipeline."""
+# -- Pipeline styles -------------------------------------------------------
 
-    class Double(Transformer[int, int]):
-        def __call__(self, upstream: Iterator[Observation[int]]) -> Iterator[Observation[int]]:
-            for obs in upstream:
-                yield obs.derive(data=obs.data * 2)
 
-    class Doubler(StreamModule):
-        pipeline = Double()
-        numbers: In[int]
-        doubled: Out[int]
+class StaticStreamModule(StreamModule):
+    """Pipeline as a static Stream chain on the class."""
 
-    bp = Doubler.blueprint()
+    pipeline = Stream().transform(Double())
+    numbers: In[int]
+    doubled: Out[int]
+
+
+class StaticTransformerModule(StreamModule):
+    """Pipeline as a bare Transformer on the class."""
+
+    pipeline = Double()
+    numbers: In[int]
+    doubled: Out[int]
+
+
+class MethodPipelineConfig(ModuleConfig):
+    factor: int = 2
+
+
+class MethodPipelineModule(StreamModule[MethodPipelineConfig]):
+    """Pipeline as a method with access to self.config."""
+
+    default_config = MethodPipelineConfig
+
+    def pipeline(self, stream: Stream) -> Stream:
+        return stream.transform(Double(factor=self.config.factor))
+
+    numbers: In[int]
+    doubled: Out[int]
+
+
+# -- Grid ------------------------------------------------------------------
+
+module_cases = [
+    pytest.param(StaticStreamModule, id="static-stream"),
+    pytest.param(StaticTransformerModule, id="static-transformer"),
+    pytest.param(MethodPipelineModule, id="method-pipeline"),
+]
+
+
+@pytest.mark.parametrize("module_cls", module_cases)
+def test_blueprint_ports(module_cls: type[StreamModule]) -> None:
+    """All pipeline styles produce a blueprint with the correct In/Out ports."""
+    bp = module_cls.blueprint()
 
     assert len(bp.blueprints) == 1
     atom = bp.blueprints[0]
@@ -70,52 +98,18 @@ def test_stream_module_with_transformer_pipeline() -> None:
     assert "doubled" in stream_names
 
 
-def test_stream_module_with_method_pipeline() -> None:
-    """StreamModule accepts a method pipeline with access to self.config."""
+def _reset_thread_pool() -> None:
+    """Shut down and replace the global RxPY thread pool so conftest thread-leak check passes."""
+    import dimos.utils.threadpool as tp
 
-    class MyConfig(ModuleConfig):
-        factor: int = 3
-
-    class Double(Transformer[int, int]):
-        def __init__(self, factor: int = 2) -> None:
-            self.factor = factor
-
-        def __call__(self, upstream: Iterator[Observation[int]]) -> Iterator[Observation[int]]:
-            for obs in upstream:
-                yield obs.derive(data=obs.data * self.factor)
-
-    class Multiplier(StreamModule[MyConfig]):
-        default_config = MyConfig
-
-        def pipeline(self, stream: Stream) -> Stream:
-            return stream.transform(Double(factor=self.config.factor))
-
-        numbers: In[int]
-        result: Out[int]
-
-    bp = Multiplier.blueprint(factor=5)
-
-    assert len(bp.blueprints) == 1
-    atom = bp.blueprints[0]
-    stream_names = {s.name for s in atom.streams}
-    assert "numbers" in stream_names
-    assert "result" in stream_names
+    tp.scheduler.executor.shutdown(wait=True)
+    tp.scheduler = ThreadPoolScheduler(max_workers=tp.get_max_workers())
 
 
-def test_stream_module_runtime_wiring() -> None:
-    """End-to-end: push data into In port, assert transformed data on Out port."""
-
-    class Double(Transformer[int, int]):
-        def __call__(self, upstream: Iterator[Observation[int]]) -> Iterator[Observation[int]]:
-            for obs in upstream:
-                yield obs.derive(data=obs.data * 2)
-
-    class Doubler(StreamModule):
-        pipeline = Stream().transform(Double())
-        numbers: In[int]
-        doubled: Out[int]
-
-    module = Doubler()
+@pytest.mark.parametrize("module_cls", module_cases)
+def test_e2e_runtime_wiring(module_cls: type[StreamModule]) -> None:
+    """Push data into In port, assert doubled data arrives on Out port."""
+    module = module_cls()
     module.numbers.transport = pLCMTransport("/test/numbers")
     module.doubled.transport = pLCMTransport("/test/doubled")
 
@@ -132,5 +126,4 @@ def test_stream_module_runtime_wiring() -> None:
     finally:
         unsub()
         module.stop()
-        # Shutdown the global RxPY thread pool so conftest thread-leak check passes
-        get_scheduler().executor.shutdown(wait=True)
+        _reset_thread_pool()

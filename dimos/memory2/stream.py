@@ -78,7 +78,6 @@ class Stream(CompositeResource, Generic[T]):
         self._query = query
 
     def stop(self) -> None:
-        """Close live buffer, then dispose source + subscriptions."""
         buf = self._query.live_buffer
         if buf is not None:
             buf.close()

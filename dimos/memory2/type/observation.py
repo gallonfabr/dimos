@@ -53,7 +53,6 @@ class Observation(Generic[T]):
 
     @property
     def pose_stamped(self) -> PoseStamped:
-        """Return the pose as a PoseStamped with this observation's timestamp."""
         from dimos.msgs.geometry_msgs.PoseStamped import PoseStamped
 
         if self.pose is None:
