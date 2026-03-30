@@ -28,7 +28,6 @@ from collections import Counter, deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-import re
 import threading
 import time
 from typing import Any
@@ -95,11 +94,13 @@ def _tally_weighted_recent(
     if not votes:
         return None
     duration = max(window_end - window_start, 0.001)
-    weighted: Counter[str] = Counter()
+    weighted: dict[str, float] = {}
     for cmd, ts, _ in votes:
         weight = 0.5 + 0.5 * ((ts - window_start) / duration)
-        weighted[cmd] += int(weight * 1000)
-    return weighted.most_common(1)[0][0] if weighted else None
+        weighted[cmd] = weighted.get(cmd, 0.0) + weight
+    if not weighted:
+        return None
+    return max(weighted, key=weighted.__getitem__)
 
 
 def _tally_runoff(votes: list[tuple[str, float, str]]) -> str | None:
@@ -159,12 +160,6 @@ class TwitchVotes(TwitchChat):
     def start(self) -> None:
         self._stop_event.clear()
         self._valid_choices = frozenset(self.config.choices)
-
-        # Auto-generate filter patterns from choices so the base filters correctly
-        if self.config.choices and not self.config.patterns:
-            escaped = "|".join(re.escape(c) for c in self.config.choices)
-            self.config.patterns = [rf"^{re.escape(self.config.bot_prefix)}(?:{escaped})\b"]
-
         super().start()
 
         self._vote_thread = threading.Thread(
@@ -202,7 +197,14 @@ class TwitchVotes(TwitchChat):
             cutoff = window_end - self.config.vote_window_seconds
             with self._votes_lock:
                 current_votes = [(c, ts, v) for c, ts, v in self._votes if ts >= cutoff]
-                self._votes.clear()
+                # Keep only votes that arrived after this window ended
+                self._votes = deque((c, ts, v) for c, ts, v in self._votes if ts >= window_end)
+
+            # Deduplicate: keep only the latest vote per voter
+            latest_per_voter: dict[str, tuple[str, float, str]] = {}
+            for vote in current_votes:
+                latest_per_voter[vote[2]] = vote
+            current_votes = list(latest_per_voter.values())
 
             if len(current_votes) < self.config.min_votes_threshold:
                 continue

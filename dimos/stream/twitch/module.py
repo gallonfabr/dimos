@@ -52,10 +52,10 @@ class TwitchMessage:
         return self.content
 
     def find_one(self, options: list[str] | set[str] | frozenset[str]) -> str | None:
-        """Return the first option found in the message content (case-insensitive), or None."""
+        """Return the first option found as a whole word in content (case-insensitive), or None."""
         lower = self.content.lower()
         for opt in options:
-            if opt.lower() in lower:
+            if re.search(rf"\b{re.escape(opt.lower())}\b", lower):
                 return opt
         return None
 
@@ -105,11 +105,11 @@ class TwitchChat(Module["TwitchChatConfig"]):
         token = self.config.twitch_token or os.getenv("DIMOS_TWITCH_TOKEN", "")
         channel = self.config.channel_name or os.getenv("DIMOS_CHANNEL_NAME", "")
 
+        self._compiled_patterns = [re.compile(p, re.IGNORECASE) for p in self.config.patterns]
+
         if not token or not channel:
             logger.warning("[TwitchChat] No token/channel — running in local-only mode")
             return
-
-        self._compiled_patterns = [re.compile(p, re.IGNORECASE) for p in self.config.patterns]
 
         self._bot_loop = asyncio.new_event_loop()
         self._bot_thread = threading.Thread(
@@ -141,12 +141,15 @@ class TwitchChat(Module["TwitchChatConfig"]):
     @rpc
     def stop(self) -> None:
         if self._bot is not None and self._bot_loop is not None:
+            try:
 
-            async def _close() -> None:
-                assert self._bot is not None
-                await self._bot.close()
+                async def _close() -> None:
+                    assert self._bot is not None
+                    await self._bot.close()
 
-            asyncio.run_coroutine_threadsafe(_close(), self._bot_loop).result(timeout=5)
+                asyncio.run_coroutine_threadsafe(_close(), self._bot_loop).result(timeout=5)
+            except Exception:
+                logger.warning("[TwitchChat] Error closing bot", exc_info=True)
 
         if self._bot_loop is not None:
             self._bot_loop.call_soon_threadsafe(self._bot_loop.stop)
@@ -218,6 +221,7 @@ class TwitchChat(Module["TwitchChatConfig"]):
         msg = TwitchMessage(author=author, content=content, channel="local", timestamp=time.time())
         self.raw_messages.publish(msg)
         self._publish_if_matched(msg)
+        self._on_message_received(msg)
 
 
 class _TwitchBot:

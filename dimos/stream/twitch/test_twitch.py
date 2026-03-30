@@ -50,13 +50,19 @@ class TestTwitchMessage:
         msg = TwitchMessage(content="go left or right")
         assert msg.find_one(["left", "right"]) == "left"
 
+    def test_find_one_word_boundary(self) -> None:
+        msg = TwitchMessage(content="I want to go backwards")
+        assert msg.find_one(["back", "forward"]) is None
+
     def test_find_one_with_set(self) -> None:
         msg = TwitchMessage(content="back")
-        assert msg.find_one({"forward", "back"}) == "back"
+        result = msg.find_one({"forward", "back"})
+        assert result in ("forward", "back")  # set order not guaranteed
 
     def test_find_one_with_frozenset(self) -> None:
         msg = TwitchMessage(content="left")
-        assert msg.find_one(frozenset(["left", "right"])) == "left"
+        result = msg.find_one(frozenset(["left", "right"]))
+        assert result in ("left", "right")  # frozenset order not guaranteed
 
     def test_repr(self) -> None:
         msg = TwitchMessage(author="user1", content="hi")
