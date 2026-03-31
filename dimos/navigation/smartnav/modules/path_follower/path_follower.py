@@ -25,7 +25,6 @@ from dimos.core.stream import In, Out
 from dimos.msgs.geometry_msgs.Twist import Twist
 from dimos.msgs.nav_msgs.Odometry import Odometry
 from dimos.msgs.nav_msgs.Path import Path
-from dimos.utils.change_detect import Glob, PathEntry
 
 
 class PathFollowerConfig(NativeModuleConfig):

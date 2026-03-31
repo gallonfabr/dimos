@@ -26,7 +26,6 @@ from dimos.core.stream import In, Out
 from dimos.msgs.geometry_msgs.PointStamped import PointStamped
 from dimos.msgs.nav_msgs.Odometry import Odometry
 from dimos.msgs.sensor_msgs.PointCloud2 import PointCloud2
-from dimos.utils.change_detect import Glob, PathEntry
 
 
 class FarPlannerConfig(NativeModuleConfig):
