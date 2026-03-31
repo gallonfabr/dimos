@@ -23,10 +23,11 @@ from dimos.mapping.pointclouds.occupancy import (
     general_occupancy,
 )
 from dimos.memory2.store.sqlite import SqliteStore
-from dimos.memory2.transform import smooth, speed
+from dimos.memory2.transform import normalize, smooth, speed
+from dimos.memory2.vis.color import color
 from dimos.memory2.vis.drawing2d.drawing2d import Drawing2D
 from dimos.memory2.vis.graph.graph import GraphTime
-from dimos.memory2.vis.type import Color, Point
+from dimos.memory2.vis.type import Point
 from dimos.models.embedding.clip import CLIPModel
 from dimos.utils.data import get_data
 
@@ -55,32 +56,37 @@ def plot_mosaic(frames, path, cols=5):
 
 
 store = SqliteStore(path=get_data("go2_bigoffice.db"))
-
 global_map = pickle.loads(get_data("unitree_go2_bigoffice_map.pickle").read_bytes())
-
 costmap = simple_inflate(general_occupancy(global_map), 0.05)
-drawing = Drawing2D()
-drawing.add(costmap)
 
-# store.streams.color_image.tap(
-#     lambda obs: drawing.add(
-#         Point(
-#             obs.pose_stamped,
-#             color=Color("brightness", value=obs.data.brightness, cmap="inferno"),
-#             radius=0.025,
-#         )
-#     )
-# ).drain()
+print("brightness start")
+drawing_brightness = Drawing2D()
+drawing_brightness.add(costmap)
 
-# store.streams.color_image.transform(speed(window=20)).tap(
-#     lambda obs: drawing.add(
-#         Point(
-#             obs.pose_stamped,
-#             color=Color("speed", value=obs.data, cmap="inferno"),
-#             radius=0.025,
-#         )
-#     )
-# ).drain()
+store.streams.color_image.map(lambda obs: obs.derive(data=obs.data.brightness)).transform(
+    normalize()
+).tap(
+    lambda obs: drawing_brightness.add(
+        Point(obs.pose_stamped, color=color(obs.data, cmap="turbo"), radius=0.025)
+    )
+).drain()
+print("brightness done")
+drawing_brightness.to_svg("assets/space_brightness.svg")
+
+print("speed start")
+
+drawing_speed = Drawing2D()
+drawing_speed.add(costmap)
+
+store.streams.color_image.transform(speed()).transform(smooth(20)).transform(normalize()).tap(
+    lambda obs: drawing_speed.add(
+        Point(obs.pose_stamped, color=color(obs.data, cmap="turbo"), radius=0.025)
+    )
+).drain()
+
+drawing_speed.to_svg("assets/space_speed.svg")
+print("speed done")
+
 
 clip = CLIPModel()
 
@@ -89,6 +95,11 @@ embedded = store.streams.color_image_embedded
 search_text = "bottle"
 text_vector = clip.embed_text(search_text)
 
+print("similarity start")
+
+drawing = Drawing2D()
+drawing.add(costmap)
+
 similarity_stream = (
     embedded.search(text_vector)
     .order_by("ts")
@@ -96,13 +107,17 @@ similarity_stream = (
     .transform(smooth(10))
 )
 
-similarity_stream.tap(
+similarity_stream.transform(normalize()).tap(
     lambda obs: drawing.add(
-        Point(obs.pose_stamped, color=Color("similarity", obs.data, cmap="turbo"), radius=0.025)
+        Point(obs.pose_stamped, color=color(obs.data, cmap="turbo"), radius=0.025)
     )
 ).drain()
 
-drawing.to_svg("assets/imageposes.svg")
+print("similarity done")
+
+drawing.to_svg("assets/space_embeddings.svg")
+
+print("graphs start")
 
 graph = GraphTime()
 
@@ -125,9 +140,5 @@ graph.add(
     label="brightness",
     color="#f1c40f",
 )
-
-graph.to_svg("assets/timegraph.svg")
-
-graph.to_svg("assets/timegraph.svg")
 
 graph.to_svg("assets/timegraph.svg")

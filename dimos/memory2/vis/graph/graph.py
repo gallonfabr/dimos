@@ -18,7 +18,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from dimos.memory2.vis.color import resolve_colors
 from dimos.memory2.vis.type import GraphElement, HLine, Markers, Series
 
 
@@ -72,7 +71,6 @@ class GraphTime:
         """Render to SVG string. Optionally write to file."""
         from dimos.memory2.vis.graph.svg import render
 
-        resolve_colors(self._elements)
         svg = render(self)
         if path is not None:
             with open(path, "w") as f:

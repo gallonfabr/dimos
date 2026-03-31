@@ -17,9 +17,6 @@
 from __future__ import annotations
 
 import functools
-from typing import Any
-
-from dimos.memory2.vis.type import Color
 
 
 @functools.lru_cache(maxsize=16)
@@ -34,27 +31,3 @@ def color(value: float, lo: float = 0.0, hi: float = 1.0, cmap: str = "turbo") -
     t = max(0.0, min(1.0, (value - lo) / (hi - lo))) if hi != lo else 0.5
     r, g, b, _ = _cmap(cmap)(t)
     return f"#{int(r * 255):02x}{int(g * 255):02x}{int(b * 255):02x}"
-
-
-def resolve_colors(elements: list[Any]) -> None:
-    """Resolve all Color objects to hex strings using per-group auto-ranging.
-
-    Mutates elements in-place, replacing Color instances on ``.color``
-    with resolved hex strings.
-    """
-    groups: dict[str, list[float]] = {}
-    for el in elements:
-        c = getattr(el, "color", None)
-        if isinstance(c, Color) and c.value is not None:
-            groups.setdefault(c.group, []).append(c.value)
-
-    if not groups:
-        return
-
-    ranges = {g: (min(vs), max(vs)) for g, vs in groups.items()}
-
-    for el in elements:
-        c = getattr(el, "color", None)
-        if isinstance(c, Color) and c.value is not None:
-            lo, hi = ranges[c.group]
-            el.color = color(c.value, lo, hi, c.cmap)

@@ -24,12 +24,10 @@ from __future__ import annotations
 from typing import Any
 
 from dimos.memory2.type.observation import EmbeddedObservation, Observation
-from dimos.memory2.vis.color import resolve_colors
 from dimos.memory2.vis.type import (
     Arrow,
     Box3D,
     Camera,
-    Color,
     Point,
     Polyline,
     Pose,
@@ -114,13 +112,8 @@ class Drawing2D:
             )
 
     def add_embedded_observation(self, obs: EmbeddedObservation[Any], **kwargs: Any) -> None:
-        """Render an embedded observation as a similarity-colored arrow."""
-        self._elements.append(
-            Arrow(
-                msg=obs.pose_stamped,
-                color=Color("similarity", obs.similarity or 0.0, cmap="turbo"),
-            )
-        )
+        """Render an embedded observation as an arrow."""
+        self._elements.append(Arrow(msg=obs.pose_stamped, **kwargs))
 
     def add_observation(self, obs: Observation[Any], **kwargs: Any) -> None:
         """Smart dispatch: inspect observation data type to pick vis type."""
@@ -146,7 +139,6 @@ class Drawing2D:
         """Render to SVG string. Optionally write to file."""
         from dimos.memory2.vis.drawing2d.svg import render
 
-        resolve_colors(self._elements)
         svg = render(self)
         if path is not None:
             with open(path, "w") as f:

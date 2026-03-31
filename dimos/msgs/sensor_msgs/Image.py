@@ -377,8 +377,7 @@ class Image(Timestamped):
     @property
     def brightness(self) -> float:
         """Return mean brightness in [0, 1]."""
-        gray = self.to_grayscale().data
-        return float(gray.mean() / 255.0)
+        return float(self.data.mean() / 255.0)
 
     @property
     def sharpness(self) -> float:

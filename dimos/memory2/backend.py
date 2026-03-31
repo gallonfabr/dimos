@@ -87,9 +87,12 @@ class Backend(CompositeResource, Generic[T]):
         return loader
 
     def append(self, obs: Observation[T]) -> Observation[T]:
+        # Scalars are stored inline in the metadata value column — skip blob
+        is_scalar = isinstance(obs._data, (int, float))
+
         # Encode payload before any locking (avoids holding locks during IO)
         encoded: bytes | None = None
-        if self.blob_store is not None:
+        if self.blob_store is not None and not is_scalar:
             encoded = self.codec.encode(obs._data)
 
         try:
@@ -97,7 +100,7 @@ class Backend(CompositeResource, Generic[T]):
             row_id = self.metadata_store.insert(obs)
             obs.id = row_id
 
-            # Store blob
+            # Store blob (non-scalar data only)
             if encoded is not None:
                 assert self.blob_store is not None
                 self.blob_store.put(self.name, row_id, encoded)

@@ -18,9 +18,8 @@ import numpy as np
 import pytest
 
 from dimos.memory2.type.observation import EmbeddedObservation, Observation
-from dimos.memory2.vis.color import color, resolve_colors
 from dimos.memory2.vis.drawing2d.drawing2d import Drawing2D as Drawing
-from dimos.memory2.vis.type import Arrow, Box3D, Camera, Color, Point, Polyline, Pose, Text
+from dimos.memory2.vis.type import Arrow, Box3D, Camera, Point, Polyline, Pose, Text
 from dimos.msgs.geometry_msgs.Point import Point as GeoPoint
 from dimos.msgs.geometry_msgs.PoseStamped import PoseStamped
 from dimos.msgs.nav_msgs.OccupancyGrid import OccupancyGrid
@@ -190,7 +189,7 @@ class TestDrawingObservations:
         assert isinstance(el, Pose)
         assert el.msg.x == pytest.approx(5.0)
 
-    def test_embedded_observation_becomes_deferred_color_arrow(self):
+    def test_embedded_observation_becomes_arrow(self):
         obs = EmbeddedObservation(
             id=0,
             ts=0.0,
@@ -204,74 +203,6 @@ class TestDrawingObservations:
         assert len(d) == 1
         el = d.elements[0]
         assert isinstance(el, Arrow)
-        assert isinstance(el.color, Color)
-        assert el.color.value == 0.8
-
-    def test_embedded_observations_auto_range(self):
-        """Packed similarities (0.8-0.95) should span the full colormap."""
-        results = [
-            EmbeddedObservation(
-                id=i,
-                ts=float(i),
-                pose=(i, i * 0.5, 0, 0, 0, 0, 1),
-                _data="x",
-                similarity=s,
-            )
-            for i, s in enumerate([0.80, 0.85, 0.90, 0.95])
-        ]
-
-        d = Drawing()
-        for obs in results:
-            d.add(obs)
-
-        resolve_colors(d._elements)
-
-        for el in d.elements:
-            assert isinstance(el, Arrow)
-            assert isinstance(el.color, str)
-
-        # lo=0.80, hi=0.95 → first maps to 0.0, last to 1.0
-        assert d.elements[0].color == color(0.80, 0.80, 0.95, cmap="turbo")
-        assert d.elements[3].color == color(0.95, 0.80, 0.95, cmap="turbo")
-        # All 4 should be distinct
-        colors = [el.color for el in d.elements]
-        assert len(set(colors)) == 4
-
-
-class TestColor:
-    """Color deferred coloring and factory pattern."""
-
-    def test_factory_pattern(self):
-        speed = Color("speed", cmap="turbo")
-        c = speed(2.5)
-        assert c.group == "speed"
-        assert c.value == 2.5
-        assert c.cmap == "turbo"
-
-    def test_separate_groups_get_separate_ranges(self):
-        d = Drawing()
-        # Speed values: 1-5
-        for v in [1.0, 3.0, 5.0]:
-            d.add(Point(GeoPoint(v, 0, 0), color=Color("speed", v, cmap="turbo")))
-        # Similarity values: 0.8-0.95
-        for v in [0.80, 0.95]:
-            d.add(Point(GeoPoint(0, v, 0), color=Color("sim", v, cmap="RdYlBu_r")))
-
-        resolve_colors(d._elements)
-
-        # Speed endpoints map to cmap(0.0) and cmap(1.0)
-        assert d.elements[0].color == color(1.0, 1.0, 5.0, "turbo")
-        assert d.elements[2].color == color(5.0, 1.0, 5.0, "turbo")
-        # Similarity endpoints map to cmap(0.0) and cmap(1.0)
-        assert d.elements[3].color == color(0.80, 0.80, 0.95, "RdYlBu_r")
-        assert d.elements[4].color == color(0.95, 0.80, 0.95, "RdYlBu_r")
-
-    def test_plain_string_color_unaffected(self):
-        d = Drawing()
-        d.add(Point(GeoPoint(0, 0, 0), color="green"))
-        d.add(Point(GeoPoint(1, 0, 0), color=Color("x", 1.0)))
-        resolve_colors(d._elements)
-        assert d.elements[0].color == "green"
 
 
 class TestDrawingConvenience:

@@ -18,7 +18,7 @@ import pytest
 
 from dimos.memory2.type.observation import Observation
 from dimos.memory2.vis.graph.graph import GraphTime
-from dimos.memory2.vis.type import Color, HLine, Markers, Series
+from dimos.memory2.vis.type import HLine, Markers, Series
 
 
 class TestGraphTimeAdd:
@@ -67,20 +67,6 @@ class TestGraphTimeAdd:
         g = GraphTime()
         with pytest.raises(TypeError, match="does not know how to handle"):
             g.add(42)
-
-
-class TestGraphTimeColor:
-    """Color resolution works in GraphTime."""
-
-    def test_deferred_color_resolved_on_render(self):
-        g = GraphTime()
-        g.add(Series(ts=[1, 2, 3], values=[10, 20, 30], color=Color("speed", 1.0)))
-        g.add(Series(ts=[1, 2, 3], values=[5, 15, 25], color=Color("speed", 5.0)))
-        g.to_svg()
-        # After rendering, colors should be resolved hex strings
-        assert isinstance(g.elements[0].color, str)
-        assert isinstance(g.elements[1].color, str)
-        assert g.elements[0].color != g.elements[1].color
 
 
 class TestGraphTimeSVG:

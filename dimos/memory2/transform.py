@@ -150,6 +150,22 @@ def smooth(window: int) -> FnIterTransformer[float, float]:
     return FnIterTransformer(_smooth)
 
 
+def normalize() -> FnIterTransformer[float, float]:
+    """Normalize obs.data to [0, 1] range across all observations."""
+
+    def _normalize(upstream: Iterator[Observation[float]]) -> Iterator[Observation[float]]:
+        items = list(upstream)
+        if not items:
+            return
+        values = [obs.data for obs in items]
+        lo, hi = min(values), max(values)
+        for obs in items:
+            t = (obs.data - lo) / (hi - lo) if hi != lo else 0.5
+            yield obs.derive(data=t)
+
+    return FnIterTransformer(_normalize)
+
+
 class QualityWindow(Transformer[T, T]):
     """Keeps the highest-quality item per time window.
 
