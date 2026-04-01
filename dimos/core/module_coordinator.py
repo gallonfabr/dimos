@@ -36,7 +36,6 @@ DeploymentManager: TypeAlias = WorkerManagerDocker | WorkerManager
 
 class ModuleCoordinator(Resource):  # type: ignore[misc]
     """
-    There should only ever be one module coordinator instance (this is a singleton)
     - Module (classes) should be able to be deployed, stopped, and re-deployed in on one instance of ModuleCoordinator
     - Arguably ModuleCoordinator could be called the "DimosRuntime"
     - ModuleCoordinator is responsible for all global "addresses".
