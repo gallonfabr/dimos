@@ -28,19 +28,32 @@ _DEPTH_MODEL_NAME = "depth-anything/Depth-Anything-V2-Small-hf"
 _DEPTH_MAX_WIDTH = 640
 
 
+def _get_torch_device() -> str:
+    """Return the best available torch device: CUDA > MPS > CPU."""
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available() and torch.backends.mps.is_built():
+        return "mps"
+    return "cpu"
+
+
 class DepthEstimator:
     """Runs depth estimation in a background thread, always processing only the latest image."""
 
-    def __init__(self, publish: Callable[[Image], None]) -> None:
+    def __init__(self, publish: Callable[[Image], None], device: str | None = None) -> None:
         self._publish = publish
-        self._processor = AutoImageProcessor.from_pretrained(_DEPTH_MODEL_NAME)
-        self._model = AutoModelForDepthEstimation.from_pretrained(_DEPTH_MODEL_NAME).to("cuda")
+        self._processor: AutoImageProcessor | None = None
+        self._device = device
+        self._model: AutoModelForDepthEstimation | None = None
         self._latest: Image | None = None
         self._event = threading.Event()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
+        self._device = self._device or torch.device(_get_torch_device())
+        self._processor = AutoImageProcessor.from_pretrained(_DEPTH_MODEL_NAME)
+        self._model = AutoModelForDepthEstimation.from_pretrained(_DEPTH_MODEL_NAME).to(self._device)
         self._stop.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True, name="DepthEstimator")
         self._thread.start()
@@ -74,7 +87,7 @@ class DepthEstimator:
             scale = _DEPTH_MAX_WIDTH / pil_image.width
             new_h = int(pil_image.height * scale)
             pil_image = pil_image.resize((_DEPTH_MAX_WIDTH, new_h), PILImage.Resampling.BILINEAR)
-        inputs = self._processor(images=pil_image, return_tensors="pt").to("cuda")
+        inputs = self._processor(images=pil_image, return_tensors="pt").to(self._device)
 
         with torch.no_grad():
             outputs = self._model(**inputs)

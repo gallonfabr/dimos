@@ -159,10 +159,8 @@ class SecurityModule(Module[SecurityModuleConfig]):
         self._detector = YoloPersonDetector()
         self._tracker = EdgeTAMProcessor()
 
-        self._depth_estimator: DepthEstimator | None = None
-        if torch.cuda.is_available():
-            self._depth_estimator = DepthEstimator(self.depth_image.publish)
-
+        # self._depth_estimator = DepthEstimator(self.depth_image.publish)
+        self._depth_estimator = None
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
         self._goal_reached_event = threading.Event()

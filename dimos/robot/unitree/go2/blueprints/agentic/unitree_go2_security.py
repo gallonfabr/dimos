@@ -91,6 +91,6 @@ rerun_config = {
 unitree_go2_security = autoconnect(
     unitree_go2_agentic,
     RerunBridgeModule.blueprint(viewer_mode=_resolve_viewer_mode(), **rerun_config),
-)
+).global_config(n_workers=12)
 
 __all__ = ["unitree_go2_security"]

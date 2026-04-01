@@ -18,8 +18,14 @@ from dimos.msgs.sensor_msgs.Image import Image
 from dimos.perception.detection.detectors.base import Detector
 from dimos.perception.detection.type.detection2d.imageDetections2D import ImageDetections2D
 from dimos.utils.data import get_data
+import torch
+
 from dimos.utils.gpu_utils import is_cuda_available
 from dimos.utils.logging_config import setup_logger
+
+
+def _mps_available() -> bool:
+    return torch.backends.mps.is_available() and torch.backends.mps.is_built()
 
 logger = setup_logger()
 
@@ -41,10 +47,11 @@ class YoloPersonDetector(Detector):
 
         if is_cuda_available():  # type: ignore[no-untyped-call]
             self.device = "cuda"
-            logger.info("Using CUDA for YOLO person detector")
+        elif _mps_available():
+            self.device = "mps"
         else:
             self.device = "cpu"
-            logger.info("Using CPU for YOLO person detector")
+        logger.info(f"Using {self.device.upper()} for YOLO person detector")
 
     def process_image(self, image: Image) -> ImageDetections2D:
         """Process image and return detection results.
