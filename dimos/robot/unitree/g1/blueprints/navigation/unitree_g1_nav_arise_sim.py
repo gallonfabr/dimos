@@ -49,13 +49,8 @@ from dimos.navigation.smart_nav.blueprints._rerun_helpers import (
 )
 from dimos.navigation.smart_nav.modules.arise_sim_adapter import AriseSimAdapter
 from dimos.navigation.smart_nav.modules.arise_slam.arise_slam import AriseSLAM
-from dimos.navigation.smart_nav.modules.click_to_goal.click_to_goal import ClickToGoal
-from dimos.navigation.smart_nav.modules.cmd_vel_mux import CmdVelMux
-from dimos.navigation.smart_nav.modules.local_planner.local_planner import LocalPlanner
-from dimos.navigation.smart_nav.modules.path_follower.path_follower import PathFollower
-from dimos.navigation.smart_nav.modules.terrain_analysis.terrain_analysis import TerrainAnalysis
-from dimos.navigation.smart_nav.modules.terrain_map_ext.terrain_map_ext import TerrainMapExt
 from dimos.protocol.pubsub.impl.lcmpubsub import LCM
+from dimos.robot.unitree.g1.blueprints.navigation._smart_nav import _smart_nav_sim
 from dimos.simulation.unity.module import UnityBridgeModule
 from dimos.visualization.vis_module import vis_module
 
@@ -107,30 +102,11 @@ unitree_g1_nav_arise_sim = (
         # SLAM — estimates pose from body-frame lidar + synthetic IMU
         AriseSLAM.blueprint(use_imu=True),
         # Nav stack — uses SLAM's odometry + registered_scan (NOT Unity's)
-        TerrainAnalysis.blueprint(obstacle_height_thre=0.2, max_rel_z=1.5),
-        TerrainMapExt.blueprint(),
-        LocalPlanner.blueprint(
-            autonomy_mode=True,
-            max_speed=2.0,
-            autonomy_speed=2.0,
-            obstacle_height_thre=0.2,
-            max_rel_z=1.5,
-            min_rel_z=-1.0,
-        ),
-        PathFollower.blueprint(
-            autonomy_mode=True,
-            max_speed=2.0,
-            autonomy_speed=2.0,
-            max_accel=4.0,
-            slow_dwn_dis_thre=0.2,
-        ),
-        ClickToGoal.blueprint(),
-        CmdVelMux.blueprint(),
+        _smart_nav_sim,
         _vis,
     )
     .remappings(
         [
-            (PathFollower, "cmd_vel", "nav_cmd_vel"),
             (UnityBridgeModule, "terrain_map", "terrain_map_ext"),
             # Rename Unity's outputs so they don't collide with AriseSLAM's.
             # The adapter reads sim_* and AriseSLAM outputs the canonical names.

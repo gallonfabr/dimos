@@ -36,16 +36,11 @@ from dimos.navigation.smart_nav.blueprints._rerun_helpers import (
     terrain_map_override,
     waypoint_override,
 )
-from dimos.navigation.smart_nav.modules.click_to_goal.click_to_goal import ClickToGoal
-from dimos.navigation.smart_nav.modules.cmd_vel_mux import CmdVelMux
-from dimos.navigation.smart_nav.modules.local_planner.local_planner import LocalPlanner
-from dimos.navigation.smart_nav.modules.path_follower.path_follower import PathFollower
 from dimos.navigation.smart_nav.modules.sensor_scan_generation.sensor_scan_generation import (
     SensorScanGeneration,
 )
-from dimos.navigation.smart_nav.modules.terrain_analysis.terrain_analysis import TerrainAnalysis
-from dimos.navigation.smart_nav.modules.terrain_map_ext.terrain_map_ext import TerrainMapExt
 from dimos.protocol.pubsub.impl.lcmpubsub import LCM
+from dimos.robot.unitree.g1.blueprints.navigation._smart_nav import _smart_nav_sim
 from dimos.simulation.unity.module import UnityBridgeModule
 from dimos.visualization.vis_module import vis_module
 
@@ -93,34 +88,11 @@ unitree_g1_nav_basic_sim = (
             vehicle_height=1.24,
         ),
         SensorScanGeneration.blueprint(),
-        TerrainAnalysis.blueprint(
-            obstacle_height_thre=0.2,
-            max_rel_z=1.5,
-        ),
-        TerrainMapExt.blueprint(),
-        LocalPlanner.blueprint(
-            autonomy_mode=True,
-            max_speed=2.0,
-            autonomy_speed=2.0,
-            obstacle_height_thre=0.2,
-            max_rel_z=1.5,
-            min_rel_z=-1.0,
-        ),
-        PathFollower.blueprint(
-            autonomy_mode=True,
-            max_speed=2.0,
-            autonomy_speed=2.0,
-            max_accel=4.0,
-            slow_dwn_dis_thre=0.2,
-        ),
-        ClickToGoal.blueprint(),
-        CmdVelMux.blueprint(),
+        _smart_nav_sim,
         _vis,
     )
     .remappings(
         [
-            # PathFollower cmd_vel → CmdVelMux nav input (avoid name collision with mux output)
-            (PathFollower, "cmd_vel", "nav_cmd_vel"),
             # Unity needs the extended (persistent) terrain map for Z-height, not the local one
             (UnityBridgeModule, "terrain_map", "terrain_map_ext"),
         ]

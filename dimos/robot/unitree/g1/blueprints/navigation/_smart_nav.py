@@ -1,0 +1,194 @@
+"""Shared SmartNav module configs for G1 navigation blueprints.
+
+Two autoconnect bundles with tuned parameters:
+- _smart_nav: onboard (real hardware) — conservative speeds, detailed terrain config
+- _smart_nav_sim: simulation — higher speeds, simpler terrain config
+
+Also provides shared rerun visualization configs.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from dimos.core.blueprints import autoconnect
+from dimos.navigation.smart_nav.blueprints._rerun_helpers import (
+    global_map_override,
+    goal_path_override,
+    path_override,
+    sensor_scan_override,
+    static_floor,
+    static_robot,
+    terrain_map_ext_override,
+    terrain_map_override,
+    waypoint_override,
+)
+from dimos.navigation.smart_nav.modules.click_to_goal.click_to_goal import ClickToGoal
+from dimos.navigation.smart_nav.modules.cmd_vel_mux import CmdVelMux
+from dimos.navigation.smart_nav.modules.far_planner.far_planner import FarPlanner
+from dimos.navigation.smart_nav.modules.local_planner.local_planner import LocalPlanner
+from dimos.navigation.smart_nav.modules.path_follower.path_follower import PathFollower
+from dimos.navigation.smart_nav.modules.pgo.pgo import PGO
+from dimos.navigation.smart_nav.modules.terrain_analysis.terrain_analysis import TerrainAnalysis
+from dimos.navigation.smart_nav.modules.terrain_map_ext.terrain_map_ext import TerrainMapExt
+from dimos.protocol.pubsub.impl.lcmpubsub import LCM
+from dimos.robot.unitree.g1.config import G1
+
+
+# ---------------------------------------------------------------------------
+# Rerun visualization
+# ---------------------------------------------------------------------------
+def _rerun_blueprint_3d() -> Any:
+    import rerun.blueprint as rrb
+
+    return rrb.Blueprint(
+        rrb.Spatial3DView(origin="world", name="3D"),
+    )
+
+
+_rerun_config = {
+    "blueprint": _rerun_blueprint_3d,
+    "pubsubs": [LCM()],
+    "min_interval_sec": 0.25,
+    "visual_override": {
+        "world/sensor_scan": sensor_scan_override,
+        "world/terrain_map": terrain_map_override,
+        "world/terrain_map_ext": terrain_map_ext_override,
+        "world/global_map": global_map_override,
+        "world/path": path_override,
+        "world/way_point": waypoint_override,
+        "world/goal_path": goal_path_override,
+    },
+    "static": {
+        "world/floor": static_floor,
+        "world/tf/robot": static_robot,
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# Onboard (real hardware)
+# ---------------------------------------------------------------------------
+_smart_nav = autoconnect(
+    TerrainAnalysis.blueprint(
+        # Input filtering
+        scan_voxel_size=0.15,  # input point downsampling (m) — default 0.05, increased to reduce terrain_map density
+        # Voxel grid
+        terrain_voxel_size=1.0,  # grid cell size (m)
+        terrain_voxel_half_width=10,  # grid radius in cells (→ 21×21)
+        # Obstacle/ground classification
+        obstacle_height_thre=0.2,  # above this = hard obstacle (m)
+        ground_height_thre=0.1,  # below this = ground for cost mode (m)
+        vehicle_height=G1.height_clearance,  # ignore points above this (m)
+        min_rel_z=-1.5,  # height filter min relative to robot (m)
+        max_rel_z=1.5,  # height filter max relative to robot (m)
+        use_sorting=True,  # quantile-based ground estimation
+        quantile_z=0.25,  # ground height quantile
+        # Decay and clearing
+        decay_time=2.0,  # point persistence (s)
+        no_decay_dis=1.5,  # no-decay radius around robot (m) — default 4.0, reduced to prevent unbounded growth when stationary
+        clearing_dis=8.0,  # dynamic clearing distance (m)
+        clear_dy_obs=True,  # clear dynamic obstacles
+        no_data_obstacle=False,  # treat unseen voxels as obstacles
+        no_data_block_skip_num=0,  # skip N blocks with no data
+        min_block_point_num=10,  # min points per block for classification
+        # Voxel culling
+        voxel_point_update_thre=30,  # reprocess voxel after N points (default 100)
+        voxel_time_update_thre=2.0,  # cull voxel after N seconds
+        # Dynamic obstacle filtering
+        min_dy_obs_dis=0.14,  # min distance for dynamic obstacle detection (m)
+        abs_dy_obs_rel_z_thre=0.2,  # z threshold for dynamic obstacles (m)
+        min_dy_obs_vfov=-55.0,  # min vertical FOV for dynamic obs (deg)
+        max_dy_obs_vfov=10.0,  # max vertical FOV for dynamic obs (deg)
+        min_dy_obs_point_num=1,  # min points for dynamic obstacle
+        min_out_of_fov_point_num=20,  # min out-of-FOV points
+        # Ground lift limits
+        consider_drop=False,  # consider terrain drops
+        limit_ground_lift=False,  # limit ground plane lift
+        max_ground_lift=0.15,  # max ground lift (m)
+        dis_ratio_z=0.2,  # distance-to-z ratio for filtering
+    ),
+    TerrainMapExt.blueprint(
+        voxel_size=0.4,  # meters per voxel (coarser than local terrain)
+        decay_time=8.0,  # seconds before points expire
+        publish_rate=2.0,  # Hz
+        max_range=40.0,  # max distance from robot to keep (m)
+    ),
+    LocalPlanner.blueprint(
+        autonomy_mode=True,
+        use_terrain_analysis=True,
+        max_speed=1.0,
+        autonomy_speed=1.0,
+        obstacle_height_thre=0.2,
+        max_rel_z=1.5,
+        min_rel_z=-1.5,
+    ),
+    PathFollower.blueprint(
+        autonomy_mode=True,
+        max_speed=1.0,
+        autonomy_speed=1.0,
+        max_accel=2.0,
+        slow_dwn_dis_thre=0.2,
+    ),
+    FarPlanner.blueprint(
+        sensor_range=30.0,
+        visibility_range=25.0,
+    ),
+    PGO.blueprint(),
+    ClickToGoal.blueprint(),
+    CmdVelMux.blueprint(),
+).remappings(
+    [
+        # PathFollower cmd_vel → CmdVelMux nav input (avoid name collision with mux output)
+        (PathFollower, "cmd_vel", "nav_cmd_vel"),
+        # Global-scale planners use PGO-corrected odometry (per CMU ICRA 2022):
+        # "Loop closure adjustments are used by the high-level planners since
+        # they are in charge of planning at the global scale. Modules such as
+        # local planner and terrain analysis only care about the local
+        # environment surrounding the vehicle and work in the odometry frame."
+        (FarPlanner, "odometry", "corrected_odometry"),
+        (ClickToGoal, "odometry", "corrected_odometry"),
+        (TerrainAnalysis, "odometry", "corrected_odometry"),
+    ]
+)
+
+# ---------------------------------------------------------------------------
+# Simulation
+# ---------------------------------------------------------------------------
+_smart_nav_sim = autoconnect(
+    TerrainAnalysis.blueprint(
+        obstacle_height_thre=0.2,
+        max_rel_z=1.5,
+    ),
+    TerrainMapExt.blueprint(),
+    LocalPlanner.blueprint(
+        autonomy_mode=True,
+        max_speed=2.0,
+        autonomy_speed=2.0,
+        obstacle_height_thre=0.2,
+        max_rel_z=1.5,
+        min_rel_z=-1.0,
+    ),
+    PathFollower.blueprint(
+        autonomy_mode=True,
+        max_speed=2.0,
+        autonomy_speed=2.0,
+        max_accel=4.0,
+        slow_dwn_dis_thre=0.2,
+    ),
+    FarPlanner.blueprint(
+        sensor_range=30.0,
+        visibility_range=25.0,
+    ),
+    PGO.blueprint(),
+    ClickToGoal.blueprint(),
+    CmdVelMux.blueprint(),
+).remappings(
+    [
+        (PathFollower, "cmd_vel", "nav_cmd_vel"),
+        (FarPlanner, "odometry", "corrected_odometry"),
+        (ClickToGoal, "odometry", "corrected_odometry"),
+        (TerrainAnalysis, "odometry", "corrected_odometry"),
+        (PGO, "global_map", "global_map_pgo"),
+    ]
+)

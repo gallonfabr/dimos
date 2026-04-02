@@ -25,61 +25,17 @@ unitree_g1_nav_onboard.
 from __future__ import annotations
 
 import os
-from typing import Any
 
 from dimos.core.blueprints import autoconnect
 from dimos.hardware.sensors.lidar.fastlio2.module import FastLio2
-from dimos.navigation.smart_nav.blueprints._rerun_helpers import (
-    goal_path_override,
-    path_override,
-    sensor_scan_override,
-    static_floor,
-    static_robot,
-    terrain_map_ext_override,
-    terrain_map_override,
-    waypoint_override,
-)
-from dimos.navigation.smart_nav.modules.click_to_goal.click_to_goal import ClickToGoal
-from dimos.navigation.smart_nav.modules.cmd_vel_mux import CmdVelMux
-from dimos.navigation.smart_nav.modules.local_planner.local_planner import LocalPlanner
-from dimos.navigation.smart_nav.modules.path_follower.path_follower import PathFollower
 from dimos.navigation.smart_nav.modules.sensor_scan_generation.sensor_scan_generation import (
     SensorScanGeneration,
 )
-from dimos.navigation.smart_nav.modules.terrain_analysis.terrain_analysis import TerrainAnalysis
-from dimos.navigation.smart_nav.modules.terrain_map_ext.terrain_map_ext import TerrainMapExt
-from dimos.protocol.pubsub.impl.lcmpubsub import LCM
+from dimos.robot.unitree.g1.blueprints.navigation._smart_nav import _rerun_config, _smart_nav
 from dimos.robot.unitree.g1.config import G1
 from dimos.robot.unitree.g1.effectors.high_level.dds_sdk import G1HighLevelDdsSdk
 from dimos.visualization.rerun.bridge import RerunBridgeModule, _resolve_viewer_mode
 from dimos.visualization.rerun.websocket_server import RerunWebSocketServer
-
-
-def _rerun_blueprint() -> Any:
-    import rerun.blueprint as rrb
-
-    return rrb.Blueprint(
-        rrb.Spatial3DView(origin="world", name="3D"),
-    )
-
-
-_rerun_config = {
-    "blueprint": _rerun_blueprint,
-    "pubsubs": [LCM()],
-    "min_interval_sec": 0.25,
-    "visual_override": {
-        "world/sensor_scan": sensor_scan_override,
-        "world/terrain_map": terrain_map_override,
-        "world/terrain_map_ext": terrain_map_ext_override,
-        "world/path": path_override,
-        "world/way_point": waypoint_override,
-        "world/goal_path": goal_path_override,
-    },
-    "static": {
-        "world/floor": static_floor,
-        "world/tf/robot": static_robot,
-    },
-}
 
 unitree_g1_nav_basic_onboard = (
     autoconnect(
@@ -90,29 +46,7 @@ unitree_g1_nav_basic_onboard = (
             map_freq=1.0,  # Publish global map at 1 Hz
         ),
         SensorScanGeneration.blueprint(),
-        TerrainAnalysis.blueprint(
-            obstacle_height_thre=0.2,
-            max_rel_z=1.5,
-            vehicle_height=G1.height_clearance,
-        ),
-        TerrainMapExt.blueprint(),
-        LocalPlanner.blueprint(
-            autonomy_mode=True,
-            max_speed=1.0,
-            autonomy_speed=1.0,
-            obstacle_height_thre=0.2,
-            max_rel_z=1.5,
-            min_rel_z=-1.5,
-        ),
-        PathFollower.blueprint(
-            autonomy_mode=True,
-            max_speed=1.0,
-            autonomy_speed=1.0,
-            max_accel=2.0,
-            slow_dwn_dis_thre=0.2,
-        ),
-        ClickToGoal.blueprint(),
-        CmdVelMux.blueprint(),
+        _smart_nav,
         G1HighLevelDdsSdk.blueprint(),
         RerunBridgeModule.blueprint(viewer_mode=_resolve_viewer_mode(), **_rerun_config),
         RerunWebSocketServer.blueprint(),
@@ -121,8 +55,6 @@ unitree_g1_nav_basic_onboard = (
         [
             # FastLio2 outputs "lidar"; SmartNav modules expect "registered_scan"
             (FastLio2, "lidar", "registered_scan"),
-            # PathFollower cmd_vel → CmdVelMux nav input (avoid name collision with mux output)
-            (PathFollower, "cmd_vel", "nav_cmd_vel"),
         ]
     )
     .global_config(n_workers=8, robot_model="unitree_g1")

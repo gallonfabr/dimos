@@ -42,17 +42,12 @@ from dimos.navigation.smart_nav.blueprints._rerun_helpers import (
     terrain_map_override,
     waypoint_override,
 )
-from dimos.navigation.smart_nav.modules.cmd_vel_mux import CmdVelMux
-from dimos.navigation.smart_nav.modules.local_planner.local_planner import LocalPlanner
-from dimos.navigation.smart_nav.modules.path_follower.path_follower import PathFollower
-from dimos.navigation.smart_nav.modules.pgo.pgo import PGO
 from dimos.navigation.smart_nav.modules.sensor_scan_generation.sensor_scan_generation import (
     SensorScanGeneration,
 )
 from dimos.navigation.smart_nav.modules.tare_planner.tare_planner import TarePlanner
-from dimos.navigation.smart_nav.modules.terrain_analysis.terrain_analysis import TerrainAnalysis
-from dimos.navigation.smart_nav.modules.terrain_map_ext.terrain_map_ext import TerrainMapExt
 from dimos.protocol.pubsub.impl.lcmpubsub import LCM
+from dimos.robot.unitree.g1.blueprints.navigation._smart_nav import _smart_nav_sim
 from dimos.simulation.unity.module import UnityBridgeModule
 from dimos.visualization.vis_module import vis_module
 
@@ -99,40 +94,17 @@ unitree_g1_nav_explore_sim = (
             vehicle_height=1.24,
         ),
         SensorScanGeneration.blueprint(),
-        TerrainAnalysis.blueprint(
-            obstacle_height_thre=0.2,
-            max_rel_z=1.5,
-        ),
-        TerrainMapExt.blueprint(),
+        _smart_nav_sim,
         TarePlanner.blueprint(
             sensor_range=30.0,
         ),
-        LocalPlanner.blueprint(
-            autonomy_mode=True,
-            max_speed=2.0,
-            autonomy_speed=2.0,
-            obstacle_height_thre=0.2,
-            max_rel_z=1.5,
-            min_rel_z=-1.0,
-        ),
-        PathFollower.blueprint(
-            autonomy_mode=True,
-            max_speed=2.0,
-            autonomy_speed=2.0,
-            max_accel=4.0,
-            slow_dwn_dis_thre=0.2,
-        ),
-        PGO.blueprint(),
-        CmdVelMux.blueprint(),
         _vis,
     )
     .remappings(
         [
-            (PathFollower, "cmd_vel", "nav_cmd_vel"),
             (UnityBridgeModule, "terrain_map", "terrain_map_ext"),
             # TARE plans at global scale — needs PGO-corrected odometry
             (TarePlanner, "odometry", "corrected_odometry"),
-            (TerrainAnalysis, "odometry", "corrected_odometry"),
         ]
     )
     .global_config(n_workers=8, robot_model="unitree_g1", simulation=True)
