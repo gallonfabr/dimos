@@ -1,5 +1,3 @@
-
-
 <details><summary>Python</summary>
 
 ```python fold session=mem output=none
@@ -15,7 +13,6 @@ from dimos.memory2.vis.type import Point
 ```
 
 </details>
-
 
 we init our recording, investigate available streams
 
@@ -46,7 +43,6 @@ drawing.add(store.streams.color_image)
 drawing.to_svg("assets/color_image.svg")
 ```
 
-
 our drawing system applies turbo color scheme to timestamps by default
 
 ![output](assets/color_image.svg)
@@ -68,7 +64,6 @@ drawing.add(
 drawing.to_svg("assets/speed.svg")
 ```
 
-
 ![output](assets/speed.svg)
 
 we can do all kinds of things with this, for example map out room lighting
@@ -88,7 +83,6 @@ drawing.add(
 
 drawing.to_svg("assets/brightness.svg")
 ```
-
 
 ![output](assets/brightness.svg)
 
@@ -124,7 +118,6 @@ for obs in pipeline:
 
 let's query it!
 
-
 ```python session=mem output=none
 from dimos.models.embedding.clip import CLIPModel
 
@@ -132,11 +125,42 @@ drawing = Drawing()
 drawing.add(global_map)
 
 clip = CLIPModel()
-drawing.add(store.streams.color_image_embedded.search(clip.embed_text("shop")))
+search_vector = clip.embed_text("shop")
+drawing.add(store.streams.color_image_embedded.search(search_vector))
 
 drawing.to_svg("assets/embedding.svg")
 ```
 
-
-
 ![output](assets/embedding.svg)
+
+We don't really have to deal with the whole global map actually, let's get top 10 embeddings, and render only lidar around those.
+
+```python session=mem output=none
+from dimos.models.embedding.clip import CLIPModel
+from dimos.mapping.voxels import VoxelMapTransformer
+drawing = Drawing()
+
+# this is defined here, but not executed
+matches = store.streams.color_image_embedded.search(search_vector, k=50)
+
+print(matches) # Stream("color_image_embedded") | vector_search(k=50)
+
+# here we execute it once, and feed it into a global mapper, then draw the map
+drawing.add(
+   matches.map(lambda obs: store.streams.lidar.at(obs.ts).last()) \
+   .transform(VoxelMapTransformer()) \
+   .last().data)
+
+# then we add matches to the map
+drawing.add(matches)
+
+drawing.to_svg("assets/embedding_focused.svg")
+```
+
+<!--Result:-->
+```
+Stream("color_image_embedded") | vector_search(k=50)
+16:11:43.138 [inf][dimos/mapping/voxels.py       ] VoxelGrid using device: CUDA:0
+```
+
+![output](assets/embedding_focused.svg)
