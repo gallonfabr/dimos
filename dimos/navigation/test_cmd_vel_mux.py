@@ -41,6 +41,7 @@ class TestCmdVelMux:
 
         mux = CmdVelMux.__new__(CmdVelMux)
         mux.__dict__["_teleop_active"] = True
+        mux.__dict__["_agent_active"] = False
         mux.__dict__["_lock"] = threading.Lock()
         # _on_nav should return before reaching cmd_vel._transport.publish
         # If it didn't return early, it would crash since cmd_vel has no transport

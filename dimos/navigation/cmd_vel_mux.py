@@ -115,16 +115,20 @@ class CmdVelMux(Module[CmdVelMuxConfig]):
         self.cmd_vel._transport.publish(msg)
 
     def _on_teleop(self, msg: Twist) -> None:
-        # Ignore zero-velocity messages — they indicate key release, not
-        # active teleop.  Only non-zero commands should suppress nav and
-        # publish stop_movement.
-        if msg.is_zero():
-            return
-
         with self._lock:
             # Agent has highest priority — ignore teleop while agent is active
             if self._agent_active:
                 return
+            teleop_currently_active = self._teleop_active
+
+        if msg.is_zero():
+            # Key release: forward the zero twist so the robot stops
+            # immediately, but only while teleop is active (otherwise
+            # nav would be silenced by a stale stop). Do NOT reset the
+            # cooldown timer — nav stays suppressed for the cooldown.
+            if teleop_currently_active:
+                self.cmd_vel._transport.publish(msg)
+            return
 
         was_active: bool
         with self._lock:
