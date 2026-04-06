@@ -71,9 +71,6 @@ class TestCrossWallPlanning:
         from dimos.msgs.geometry_msgs.PointStamped import PointStamped
         from dimos.msgs.nav_msgs.Odometry import Odometry
         from dimos.navigation.smart_nav.main import smart_nav
-        from dimos.navigation.smart_nav.modules.sensor_scan_generation.sensor_scan_generation import (
-            SensorScanGeneration,
-        )
         from dimos.simulation.unity.module import UnityBridgeModule
 
         # -- Clear stale nav paths from previous runs -------------------------
@@ -90,7 +87,6 @@ class TestCrossWallPlanning:
                     unity_scene="home_building_1",
                     vehicle_height=1.24,
                 ),
-                SensorScanGeneration.blueprint(),
                 smart_nav(
                     terrain_analysis={
                         "obstacle_height_threshold": 0.1,

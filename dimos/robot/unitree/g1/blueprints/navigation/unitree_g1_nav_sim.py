@@ -41,9 +41,6 @@ from __future__ import annotations
 from dimos.core.blueprints import autoconnect
 from dimos.core.global_config import global_config
 from dimos.navigation.smart_nav.main import smart_nav, smart_nav_rerun_config
-from dimos.navigation.smart_nav.modules.sensor_scan_generation.sensor_scan_generation import (
-    SensorScanGeneration,
-)
 from dimos.robot.unitree.g1.blueprints.navigation.g1_rerun import g1_static_robot
 from dimos.simulation.unity.module import UnityBridgeModule
 from dimos.visualization.vis_module import vis_module
@@ -55,7 +52,6 @@ unitree_g1_nav_sim = (
             unity_scene="home_building_1",
             vehicle_height=1.24,
         ),
-        SensorScanGeneration.blueprint(),
         smart_nav(
             cmd_vel_mux={"teleop_linear_scale": 3.0},
             terrain_analysis={

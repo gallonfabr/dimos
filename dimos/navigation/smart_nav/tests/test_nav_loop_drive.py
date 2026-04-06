@@ -177,9 +177,6 @@ def test_multi_waypoint_loop():
     from dimos.core.blueprints import autoconnect
     from dimos.navigation.smart_nav.modules.local_planner.local_planner import LocalPlanner
     from dimos.navigation.smart_nav.modules.path_follower.path_follower import PathFollower
-    from dimos.navigation.smart_nav.modules.sensor_scan_generation.sensor_scan_generation import (
-        SensorScanGeneration,
-    )
     from dimos.navigation.smart_nav.modules.terrain_analysis.terrain_analysis import TerrainAnalysis
 
     # Collect cmd_vel to verify non-zero commands
@@ -188,7 +185,6 @@ def test_multi_waypoint_loop():
 
     blueprint = autoconnect(
         Vehicle.blueprint(),
-        SensorScanGeneration.blueprint(),
         TerrainAnalysis.blueprint(),
         LocalPlanner.blueprint(
             autonomy_mode=True,

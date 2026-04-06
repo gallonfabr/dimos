@@ -268,9 +268,6 @@ def test_explore_produces_movement():
     from dimos.msgs.nav_msgs.Path import Path as NavPath
     from dimos.navigation.smart_nav.modules.local_planner.local_planner import LocalPlanner
     from dimos.navigation.smart_nav.modules.path_follower.path_follower import PathFollower
-    from dimos.navigation.smart_nav.modules.sensor_scan_generation.sensor_scan_generation import (
-        SensorScanGeneration,
-    )
     from dimos.navigation.smart_nav.modules.tare_planner.tare_planner import TarePlanner
     from dimos.navigation.smart_nav.modules.terrain_analysis.terrain_analysis import TerrainAnalysis
 
@@ -278,7 +275,6 @@ def test_explore_produces_movement():
 
     blueprint = autoconnect(
         MockVehicle.blueprint(),
-        SensorScanGeneration.blueprint(),
         TerrainAnalysis.blueprint(),
         LocalPlanner.blueprint(autonomy_mode=True),
         PathFollower.blueprint(autonomy_mode=True),

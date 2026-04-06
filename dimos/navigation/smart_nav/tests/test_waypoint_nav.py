@@ -186,9 +186,6 @@ def test_waypoint_nav_produces_path_and_movement():
     from dimos.msgs.geometry_msgs.PointStamped import PointStamped
     from dimos.navigation.smart_nav.modules.local_planner.local_planner import LocalPlanner
     from dimos.navigation.smart_nav.modules.path_follower.path_follower import PathFollower
-    from dimos.navigation.smart_nav.modules.sensor_scan_generation.sensor_scan_generation import (
-        SensorScanGeneration,
-    )
     from dimos.navigation.smart_nav.modules.terrain_analysis.terrain_analysis import TerrainAnalysis
 
     terrain_msgs: list = []
@@ -198,7 +195,6 @@ def test_waypoint_nav_produces_path_and_movement():
 
     blueprint = autoconnect(
         SimVehicle.blueprint(),
-        SensorScanGeneration.blueprint(),
         TerrainAnalysis.blueprint(),
         LocalPlanner.blueprint(autonomy_mode=True),
         PathFollower.blueprint(autonomy_mode=True),

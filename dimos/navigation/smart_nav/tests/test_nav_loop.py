@@ -24,7 +24,6 @@ import time
 
 import numpy as np
 
-from dimos.core.blueprints import autoconnect
 from dimos.core.transport import LCMTransport
 from dimos.msgs.geometry_msgs.Pose import Pose
 from dimos.msgs.geometry_msgs.Quaternion import Quaternion
@@ -34,59 +33,7 @@ from dimos.msgs.sensor_msgs.PointCloud2 import PointCloud2
 from dimos.navigation.smart_nav.modules.sensor_scan_generation.sensor_scan_generation import (
     SensorScanGeneration,
 )
-from dimos.navigation.smart_nav.modules.tui_control.tui_control import TUIControlModule
 from dimos.simulation.unity.module import UnityBridgeModule
-
-
-class TestBlueprintConstruction:
-    """Test that autoconnect produces a valid blueprint without errors."""
-
-    def test_python_modules_autoconnect(self):
-        """autoconnect on Python-only modules should not raise."""
-        bp = autoconnect(
-            UnityBridgeModule.blueprint(sim_rate=10.0),
-            SensorScanGeneration.blueprint(),
-            TUIControlModule.blueprint(publish_rate=1.0),
-        )
-        # Should have 3 module atoms
-        assert len(bp.blueprints) == 3
-
-    def test_full_blueprint_autoconnect(self):
-        """Full simulation blueprint including NativeModules should not raise."""
-        from dimos.navigation.smart_nav.modules.local_planner.local_planner import LocalPlanner
-        from dimos.navigation.smart_nav.modules.path_follower.path_follower import PathFollower
-        from dimos.navigation.smart_nav.modules.terrain_analysis.terrain_analysis import (
-            TerrainAnalysis,
-        )
-
-        bp = autoconnect(
-            UnityBridgeModule.blueprint(sim_rate=10.0),
-            SensorScanGeneration.blueprint(),
-            TerrainAnalysis.blueprint(),
-            LocalPlanner.blueprint(),
-            PathFollower.blueprint(),
-            TUIControlModule.blueprint(publish_rate=1.0),
-        )
-        assert len(bp.blueprints) == 6
-
-    def test_no_type_conflicts(self):
-        """Blueprint should detect no type conflicts among streams."""
-        from dimos.navigation.smart_nav.modules.local_planner.local_planner import LocalPlanner
-        from dimos.navigation.smart_nav.modules.path_follower.path_follower import PathFollower
-        from dimos.navigation.smart_nav.modules.terrain_analysis.terrain_analysis import (
-            TerrainAnalysis,
-        )
-
-        bp = autoconnect(
-            UnityBridgeModule.blueprint(sim_rate=10.0),
-            SensorScanGeneration.blueprint(),
-            TerrainAnalysis.blueprint(),
-            LocalPlanner.blueprint(),
-            PathFollower.blueprint(),
-            TUIControlModule.blueprint(publish_rate=1.0),
-        )
-        # _verify_no_name_conflicts is called during build() -- test it directly
-        bp._verify_no_name_conflicts()  # should not raise
 
 
 class TestEndToEndDataFlow:

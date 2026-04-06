@@ -232,13 +232,12 @@ def smart_nav_rerun_config(
     """Return a rerun config dict with SmartNav defaults filled in via setdefault.
 
     The caller's entries win — this just ensures missing keys (blueprint,
-    pubsubs, min_interval_sec, visual_override entries, static entries) are
+    pubsubs, visual_override entries, static entries) are
     populated with the SmartNav defaults.
     """
     resolved = dict(user_config or {})
     resolved.setdefault("blueprint", _default_rerun_blueprint)
     resolved.setdefault("pubsubs", [LCM()])
-    resolved.setdefault("min_interval_sec", 0.25)
     resolved.setdefault("visual_override", {})
     resolved.setdefault("static", {})
     visual_override = dict(resolved["visual_override"])

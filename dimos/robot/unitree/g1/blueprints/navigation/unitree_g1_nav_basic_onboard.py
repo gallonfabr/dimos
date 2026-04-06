@@ -29,9 +29,6 @@ import os
 from dimos.core.blueprints import autoconnect
 from dimos.hardware.sensors.lidar.fastlio2.module import FastLio2
 from dimos.navigation.smart_nav.main import smart_nav, smart_nav_rerun_config
-from dimos.navigation.smart_nav.modules.sensor_scan_generation.sensor_scan_generation import (
-    SensorScanGeneration,
-)
 from dimos.robot.unitree.g1.blueprints.navigation.g1_rerun import g1_static_robot
 from dimos.robot.unitree.g1.config import G1
 from dimos.robot.unitree.g1.effectors.high_level.dds_sdk import G1HighLevelDdsSdk
@@ -46,7 +43,6 @@ unitree_g1_nav_basic_onboard = (
             mount=G1.internal_odom_offsets["mid360_link"],
             map_freq=1.0,  # Publish global map at 1 Hz
         ),
-        SensorScanGeneration.blueprint(),
         smart_nav(vehicle_height=G1.height_clearance),
         G1HighLevelDdsSdk.blueprint(),
         RerunBridgeModule.blueprint(
