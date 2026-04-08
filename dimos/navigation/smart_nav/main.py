@@ -193,11 +193,11 @@ def smart_nav(
         *(
             [SimplePlanner.blueprint(**(simple_planner or {}))]
             if use_simple_planner
-            else [FarPlanner.blueprint(**{
-                "is_static_env": False,
-                "sensor_range": 30.0,
-                **(far_planner or {})
-            })]
+            else [
+                FarPlanner.blueprint(
+                    **{"is_static_env": False, "sensor_range": 30.0, **(far_planner or {})}
+                )
+            ]
         ),
         PGO.blueprint(**(pgo or {})),
         ClickToGoal.blueprint(**(click_to_goal or {})),
@@ -214,7 +214,7 @@ def smart_nav(
                     # paths straight through the walls it can't currently
                     # see. 8 s was way too aggressive for that.
                     # "decay_time": 300.0,
-                    "decay_time": 12.0,
+                    "decay_time": 30.0,
                     "publish_rate": 2.0,
                     "max_range": 40.0,
                     **(terrain_map_ext or {}),
@@ -276,6 +276,7 @@ def smart_nav_rerun_config(
     visual_override.setdefault("world/way_point", _waypoint_override)
     visual_override.setdefault("world/goal", _goal_override)
     visual_override.setdefault("world/goal_path", _goal_path_override)
+    visual_override.setdefault("world/nav_boundary", _nav_boundary_override)
     visual_override.setdefault("world/obstacle_cloud", _obstacle_cloud_override)
     visual_override.setdefault("world/costmap_cloud", _costmap_cloud_override)
     resolved["visual_override"] = visual_override
@@ -402,6 +403,11 @@ def _path_override(path_msg: Any) -> Any:
         ("world/nav_path", rr.Transform3D(parent_frame="tf#/sensor")),
         ("world/nav_path", rr.LineStrips3D([points], colors=[(0, 255, 128)], radii=0.05)),
     ]
+
+
+def _nav_boundary_override(msg: Any) -> Any:
+    """Render navigation boundary: cyan edges at z=2.0 (above contours, below goal path)."""
+    return msg.to_rerun(z_offset=2.0, color=(0, 220, 255, 200), radii=0.05)
 
 
 def _goal_path_override(path_msg: Any) -> Any:

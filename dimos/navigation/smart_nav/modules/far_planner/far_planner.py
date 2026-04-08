@@ -36,13 +36,13 @@ from dimos.msgs.sensor_msgs.PointCloud2 import PointCloud2
 
 class FarPlannerConfig(NativeModuleConfig):
     """Config for the FAR planner native module."""
-    
+
     # cwd: str | None = str(Path(__file__).resolve().parent)
     # executable: str = "result/bin/far_planner"
     # build_command: str | None = (
     #     "nix build github:dimensionalOS/dimos-module-far-planner/v0.2.0 --no-write-lock-file"
     # )
-    
+
     # Build from the vendored local source in ./repo so we can patch the C++.
     cwd: str | None = str(Path(__file__).resolve().parent / "repo")
     executable: str = "result/bin/far_planner_native"
@@ -136,3 +136,4 @@ class FarPlanner(NativeModule[FarPlannerConfig]):
     graph_nodes: Out[GraphNodes3D]
     graph_edges: Out[LineSegments3D]
     contour_polygons: Out[ContourPolygons3D]
+    nav_boundary: Out[LineSegments3D]

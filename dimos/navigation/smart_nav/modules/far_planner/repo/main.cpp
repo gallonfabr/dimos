@@ -307,34 +307,39 @@ static void signal_handler(int /*sig*/) {
 /// Uses the node's surf_dirs to determine the "away from wall" direction,
 /// then ray-traces along that direction using the obstacle cloud to find
 /// how far the waypoint can be extended.
+/// Project waypoint away from obstacle surfaces (Algorithm 6 / Figure 14).
+/// Updates free_dist in-place with actual achieved distance (for heading momentum).
 static Point3D ProjectWaypointFromObstacles(
     const NavNodePtr& nav_node,
     const Point3D& robot_position,
-    float local_planner_range)
+    float& free_dist)
 {
     if (nav_node == nullptr) return Point3D(0,0,0);
 
     Point3D waypoint = nav_node->position;
 
     // Only project CONVEX nodes (nodes on obstacle corners that face outward)
-    if (nav_node->free_direct != NodeFreeDirect::CONVEX) return waypoint;
+    // For non-CONVEX nodes, set free_dist to 0 so heading extension is minimal
+    if (nav_node->free_direct != NodeFreeDirect::CONVEX) { free_dist = 0; return waypoint; }
     if (FARUtil::surround_obs_cloud_ == nullptr || FARUtil::surround_obs_cloud_->empty()) return waypoint;
 
     // Compute surface normal direction (away from obstacle)
     bool is_wall = false;
     const Point3D surf_dir = -FARUtil::SurfTopoDirect(nav_node->surf_dirs, is_wall);
-    if (is_wall || surf_dir.norm() < FARUtil::kEpsilon) return waypoint;
+    if (is_wall || surf_dir.norm() < FARUtil::kEpsilon) { free_dist = 0; return waypoint; }
 
-    // Crop obstacle cloud around the waypoint
+    // Crop obstacle cloud around the waypoint (matches original ExtendViewpointOnObsCloud)
     PointCloudPtr local_obs(new pcl::PointCloud<PCLPoint>());
-    float search_dist = std::min(local_planner_range, (nav_node->position - robot_position).norm());
-    search_dist = std::max(search_dist, FARUtil::robot_dim * 2.5f);
     FARUtil::CropPCLCloud(FARUtil::surround_obs_cloud_, local_obs,
-                          nav_node->position, search_dist + FARUtil::kNearDist);
+                          nav_node->position, free_dist + FARUtil::kNearDist);
+
+    float maxR = std::min((nav_node->position - robot_position).norm(), free_dist) - FARUtil::kNearDist;
+    maxR = std::max(maxR, 0.0f);
 
     if (local_obs->empty()) {
-        // No obstacles nearby — extend fully
-        return waypoint + surf_dir * search_dist;
+        waypoint = waypoint + surf_dir * maxR;
+        free_dist = maxR;
+        return waypoint;
     }
 
     // Build KD-tree for collision checking
@@ -345,32 +350,32 @@ static Point3D ProjectWaypointFromObstacles(
     const float collision_radius = FARUtil::kNearDist / 2.0f + FARUtil::kLeafSize;
     const int collision_threshold = static_cast<int>(std::floor(FARUtil::kNearDist / FARUtil::kLeafSize));
 
-    // Ray-trace outward from the node along surf_dir
-    Point3D test_p = waypoint + surf_dir * step;
-    float extend_dist = step;
-    float max_extend = std::min(search_dist, (robot_position - nav_node->position).norm());
-    max_extend = std::max(max_extend, 0.0f);
+    // Ray-trace outward from the node along surf_dir (matches original ray tracing)
+    Point3D start_p = waypoint + surf_dir * step;
+    float ray_dist = step;
+    PCLPoint query;
+    query.x = start_p.x; query.y = start_p.y; query.z = start_p.z;
+    bool is_occupied = static_cast<int>(FARUtil::PointInXCounter(start_p, collision_radius, FARUtil::kdtree_new_cloud_)) > collision_threshold;
+    waypoint = start_p;
 
-    while (extend_dist < max_extend) {
-        PCLPoint query;
-        query.x = test_p.x; query.y = test_p.y; query.z = test_p.z;
-        std::vector<int> indices;
-        std::vector<float> dists;
-        obs_kdtree.radiusSearch(query, collision_radius, indices, dists);
-
-        if (static_cast<int>(indices.size()) > collision_threshold) {
-            // Hit obstacle — back up and average with original position
-            waypoint = (nav_node->position + test_p - surf_dir * step) / 2.0f;
-            waypoint.z = nav_node->position.z;
-            return waypoint;
+    while (!is_occupied && ray_dist < free_dist) {
+        start_p = start_p + surf_dir * step;
+        ray_dist += step;
+        is_occupied = static_cast<int>(FARUtil::PointInXCounter(start_p, collision_radius, FARUtil::kdtree_new_cloud_)) > collision_threshold;
+        if (ray_dist < maxR) {
+            waypoint = start_p;
         }
-
-        waypoint = test_p;
-        test_p = test_p + surf_dir * step;
-        extend_dist += step;
     }
 
-    waypoint.z = nav_node->position.z;
+    if (is_occupied) {
+        waypoint = (nav_node->position + waypoint - surf_dir * step) / 2.0f;
+        waypoint.z = nav_node->position.z;
+        free_dist = ray_dist - step;
+    } else {
+        // Full extension without hitting obstacle — free_dist = actual distance extended
+        free_dist = (waypoint - nav_node->position).norm();
+    }
+
     return waypoint;
 }
 
@@ -397,6 +402,7 @@ int main(int argc, char** argv) {
     std::string g_graph_nodes_topic = mod.has("graph_nodes") ? mod.topic("graph_nodes") : "";
     std::string g_graph_edges_topic = mod.has("graph_edges") ? mod.topic("graph_edges") : "";
     std::string g_contour_polygons_topic = mod.has("contour_polygons") ? mod.topic("contour_polygons") : "";
+    std::string g_nav_boundary_topic = mod.has("nav_boundary") ? mod.topic("nav_boundary") : "";
 
     // ── Get config params (mirrors LoadROSParams in original FARMaster) ────
     float update_rate         = mod.arg_float("update_rate", 5.0f);
@@ -594,6 +600,8 @@ int main(int argc, char** argv) {
     // the goal. In our single-shot LCM design, we must handle retries ourselves.
     bool has_pending_goal = false;
     Point3D pending_goal_pos(0, 0, 0);
+    double last_goal_retry_time = 0.0;
+    const double goal_retry_interval = 2.0;  // seconds between retry attempts
     // Waypoint smoothing: track last published waypoint to reduce churn
     Point3D last_published_waypoint(0, 0, 0);
     bool has_published_waypoint = false;
@@ -761,52 +769,90 @@ int main(int argc, char** argv) {
             graph_planner.UpdateGoal(goal_pos);
             pending_goal_pos = goal_pos;
             has_pending_goal = true;
+            last_goal_retry_time = 0.0;  // allow immediate first retry if needed
             printf("[far_planner] New goal received: (%.2f, %.2f, %.2f)\n",
                    goal_pos.x, goal_pos.y, goal_pos.z);
             fflush(stdout);
         }
-        // Re-set the goal if it was cleared by a planning failure
+        // Re-set the goal if it was cleared by a planning failure (rate-limited)
         if (has_pending_goal && graph_planner.GetGoalNodePtr() == nullptr) {
-            graph_planner.UpdateGoal(pending_goal_pos);
-            printf("[far_planner] frame=%d goal re-set after failure\n", frame_count); fflush(stdout);
+            if (now_sec - last_goal_retry_time >= goal_retry_interval) {
+                graph_planner.UpdateGoal(pending_goal_pos);
+                last_goal_retry_time = now_sec;
+                printf("[far_planner] frame=%d goal re-set after failure (retry)\n", frame_count); fflush(stdout);
+            }
         }
 
         // ── Main graph update loop (mirrors FARMaster::MainLoopCallBack) ───
+        // Order matches original FARMaster exactly (lines 169-236).
         if (have_new_clouds && is_map_init) {
-            PointCloudPtr surround_obs(new pcl::PointCloud<PCLPoint>());
-            PointCloudPtr surround_free(new pcl::PointCloud<PCLPoint>());
-            map_handler.GetSurroundObsCloud(surround_obs);
-            map_handler.GetSurroundFreeCloud(surround_free);
-            // Populate the static surround_obs_cloud_ used by obstacle LOS checks
-            FARUtil::surround_obs_cloud_ = surround_obs;
-
-            scan_handler.SetSurroundObsCloud(surround_obs, !FARUtil::IsStaticEnv);
-
+            // Extract new observation points (before GetSurroundObsCloud updates the grid)
+            // Original: ExtractNewObsPointCloud(temp_obs_ptr_, surround_obs_cloud_, cur_new_cloud_)
+            //   cloudIn = current frame obs (intensity 0), cloudRefer = surround (intensity 255)
+            //   Result: points in current frame NOT in surround = genuinely new observations
             PointCloudPtr new_obs_cloud(new pcl::PointCloud<PCLPoint>());
-            if (!surround_obs->empty()) {
-                FARUtil::ExtractNewObsPointCloud(surround_obs, obs_cloud, new_obs_cloud);
-                FARUtil::UpdateKdTrees(new_obs_cloud);
+            if (!FARUtil::surround_obs_cloud_->empty()) {
+                FARUtil::ExtractNewObsPointCloud(obs_cloud, FARUtil::surround_obs_cloud_, new_obs_cloud);
             }
 
+            // Update surround clouds from grid (original lines 746-749)
+            PointCloudPtr surround_obs(new pcl::PointCloud<PCLPoint>());
+            PointCloudPtr surround_free(new pcl::PointCloud<PCLPoint>());
+            map_handler.GetSurroundFreeCloud(surround_free);
+            map_handler.GetSurroundObsCloud(surround_obs);
+            FARUtil::surround_obs_cloud_ = surround_obs;
+
+            // Dynamic obstacle handling (original lines 751-769)
+            // Original calls FARMaster::ExtractDynamicObsFromScan which does:
+            //   scan_handler.ReInitGrids()
+            //   scan_handler.SetCurrentScanCloud(scanCloud, freeCloud)
+            //   scan_handler.ExtractDyObsCloud(obsCloud, dyObsOut)
+            // SetCurrentScanCloud was already called in the scan processing section above.
+            FARUtil::cur_dyobs_cloud_->clear();
+            if (!FARUtil::IsStaticEnv) {
+                scan_handler.SetSurroundObsCloud(surround_obs, true);
+                PointCloudPtr dyobs_cloud(new pcl::PointCloud<PCLPoint>());
+                scan_handler.ExtractDyObsCloud(surround_obs, dyobs_cloud);
+                if (static_cast<int>(dyobs_cloud->size()) > FARUtil::kDyObsThred) {
+                    FARUtil::InflateCloud(dyobs_cloud, voxel_dim, 1, true);
+                    map_handler.RemoveObsCloudFromGrid(dyobs_cloud);
+                    FARUtil::RemoveOverlapCloud(surround_obs, dyobs_cloud);
+                    FARUtil::FilterCloud(dyobs_cloud, voxel_dim);
+                    *new_obs_cloud += *dyobs_cloud;
+                    FARUtil::FilterCloud(new_obs_cloud, voxel_dim);
+                }
+                FARUtil::cur_dyobs_cloud_ = dyobs_cloud;
+            } else {
+                scan_handler.SetSurroundObsCloud(surround_obs, false);
+            }
+
+            // Update KD-trees (original line 772-773)
+            FARUtil::UpdateKdTrees(new_obs_cloud);
+
             const NodePtrStack& nav_graph = dynamic_graph.GetNavGraph();
-            map_handler.AdjustNodesHeight(nav_graph);
 
             const NavNodePtr graph_odom_node = dynamic_graph.GetOdomNode();
             if (graph_odom_node != nullptr) {
+                // Contour extraction (original lines 193-194)
                 std::vector<PointStack> realworld_contour;
                 contour_detector.BuildTerrainImgAndExtractContour(
                     graph_odom_node, surround_obs, realworld_contour);
-
                 contour_graph.UpdateContourGraph(graph_odom_node, realworld_contour);
 
-                CTNodeStack new_convex_vertices;
+                // Adjust heights BEFORE matching (original lines 200-201)
+                map_handler.AdjustCTNodeHeight(ContourGraph::contour_graph_);
+                map_handler.AdjustNodesHeight(nav_graph);
+
+                // Update near nodes BEFORE matching (original lines 203-204)
+                dynamic_graph.UpdateGlobalNearNodes();
                 const NodePtrStack& near_nodes = dynamic_graph.GetExtendLocalNode();
+
+                // Match contour with nav graph (original line 206)
+                CTNodeStack new_convex_vertices;
                 contour_graph.MatchContourWithNavGraph(nav_graph, near_nodes, new_convex_vertices);
 
-                map_handler.AdjustCTNodeHeight(ContourGraph::contour_graph_);
-
+                // Extract and update graph (original lines 214-222)
                 dynamic_graph.ExtractGraphNodes(new_convex_vertices);
-                dynamic_graph.UpdateGlobalNearNodes();
 
                 const bool is_freeze_vgraph = false;
                 NodePtrStack clear_nodes;
@@ -837,6 +883,40 @@ int main(int argc, char** argv) {
                 }
                 // NOTE: UpdaetVGraph is called in the planning block below,
                 // AFTER UpdateGoalNavNodeConnects, matching the original order.
+
+                // Publish navigation boundary (local obstacle edges near robot)
+                // Matches original FARMaster::LocalBoundaryHandler
+                if (!g_nav_boundary_topic.empty()) {
+                    const auto& local_bnd = ContourGraph::local_boundary_;
+                    // Filter to edges within local_planner_range
+                    std::vector<std::pair<Point3D, Point3D>> bnd_edges;
+                    for (const auto& edge : local_bnd) {
+                        if (FARUtil::DistanceToLineSeg2D(robot_pos, edge) <= local_planner_range) {
+                            bnd_edges.push_back({edge.first, edge.second});
+                        }
+                    }
+                    if (!bnd_edges.empty()) {
+                        nav_msgs::Path bnd_msg;
+                        bnd_msg.header = dimos::make_header(g_world_frame, now_sec);
+                        bnd_msg.poses_length = static_cast<int32_t>(bnd_edges.size() * 2);
+                        bnd_msg.poses.resize(bnd_edges.size() * 2);
+                        for (size_t i = 0; i < bnd_edges.size(); ++i) {
+                            auto& p1 = bnd_msg.poses[i * 2];
+                            auto& p2 = bnd_msg.poses[i * 2 + 1];
+                            p1.header = bnd_msg.header;
+                            p2.header = bnd_msg.header;
+                            p1.pose.position.x = bnd_edges[i].first.x;
+                            p1.pose.position.y = bnd_edges[i].first.y;
+                            p1.pose.position.z = bnd_edges[i].first.z;
+                            p1.pose.orientation.w = 1.0;
+                            p2.pose.position.x = bnd_edges[i].second.x;
+                            p2.pose.position.y = bnd_edges[i].second.y;
+                            p2.pose.position.z = bnd_edges[i].second.z;
+                            p2.pose.orientation.w = 1.0;
+                        }
+                        g_lcm->publish(g_nav_boundary_topic, &bnd_msg);
+                    }
+                }
 
                 // Publish debug visualization: graph nodes (as nav_msgs/Path, decoded as GraphNodes3D)
                 // orientation.w encodes node type: 0=normal, 1=odom, 2=goal, 3=frontier, 4=navpoint
@@ -976,43 +1056,49 @@ int main(int argc, char** argv) {
                 is_fails, is_succeed, is_free_nav);
 
             if (plan_success && nav_waypoint != nullptr) {
-                // Project waypoint away from obstacle surfaces (Algorithm 6 / Figure 14)
                 Point3D waypoint;
-                float free_dist = local_planner_range;
-                if (nav_waypoint != goal_ptr && is_viewpoint_extend) {
-                    waypoint = ProjectWaypointFromObstacles(
-                        nav_waypoint, robot_pos, local_planner_range);
-                } else {
-                    waypoint = nav_waypoint->position;
-                }
-
-                // Heading momentum (matches original ProjectNavWaypoint lines 392-411)
-                // Smooths heading changes using previous direction to prevent jitter
-                bool is_momentum = (last_nav_node == nav_waypoint) ||
-                    (last_nav_node != nullptr &&
-                     (last_nav_node->position - nav_waypoint->position).norm() < FARUtil::kNearDist);
-                const Point3D diff_p = waypoint - robot_pos;
-                Point3D new_heading;
-                if (is_momentum && nav_heading.norm() > FARUtil::kEpsilon) {
-                    const float hdist = free_dist / 2.0f;
-                    const float ratio = std::min(hdist, diff_p.norm()) / hdist;
-                    new_heading = diff_p.normalize() * ratio + nav_heading * (1.0f - ratio);
-                } else {
-                    new_heading = diff_p.normalize();
-                }
-                // Prevent 180-degree heading reversal
-                if (nav_heading.norm() > FARUtil::kEpsilon && new_heading.norm_dot(nav_heading) < 0.0f) {
-                    Point3D temp_heading(nav_heading.y, -nav_heading.x, nav_heading.z);
-                    if (temp_heading.norm_dot(new_heading) < 0.0f) {
-                        temp_heading.x = -temp_heading.x;
-                        temp_heading.y = -temp_heading.y;
+                if (nav_waypoint != goal_ptr) {
+                    // Project waypoint away from obstacle surfaces (Algorithm 6 / Figure 14)
+                    // free_dist is updated by reference — shortened if wall hit
+                    float free_dist = local_planner_range;
+                    if (is_viewpoint_extend) {
+                        waypoint = ProjectWaypointFromObstacles(
+                            nav_waypoint, robot_pos, free_dist);
+                    } else {
+                        waypoint = nav_waypoint->position;
                     }
-                    new_heading = temp_heading;
-                }
-                nav_heading = new_heading.normalize();
-                // Extend waypoint along heading if too close
-                if (diff_p.norm() < free_dist) {
-                    waypoint = waypoint + nav_heading * (free_dist - diff_p.norm());
+
+                    // Heading momentum (matches original ProjectNavWaypoint lines 392-411)
+                    bool is_momentum = (last_nav_node == nav_waypoint) ||
+                        (last_nav_node != nullptr &&
+                         (last_nav_node->position - nav_waypoint->position).norm() < FARUtil::kNearDist);
+                    const Point3D diff_p = waypoint - robot_pos;
+                    Point3D new_heading;
+                    if (is_momentum && nav_heading.norm() > FARUtil::kEpsilon) {
+                        const float hdist = free_dist / 2.0f;
+                        const float ratio = std::min(hdist, diff_p.norm()) / hdist;
+                        new_heading = diff_p.normalize() * ratio + nav_heading * (1.0f - ratio);
+                    } else {
+                        new_heading = diff_p.normalize();
+                    }
+                    if (nav_heading.norm() > FARUtil::kEpsilon && new_heading.norm_dot(nav_heading) < 0.0f) {
+                        Point3D temp_heading(nav_heading.y, -nav_heading.x, nav_heading.z);
+                        if (temp_heading.norm_dot(new_heading) < 0.0f) {
+                            temp_heading.x = -temp_heading.x;
+                            temp_heading.y = -temp_heading.y;
+                        }
+                        new_heading = temp_heading;
+                    }
+                    nav_heading = new_heading.normalize();
+                    if (diff_p.norm() < free_dist) {
+                        waypoint = waypoint + nav_heading * (free_dist - diff_p.norm());
+                    }
+                } else {
+                    // Waypoint IS the goal — use goal position directly.
+                    // No projection, no heading momentum extension.
+                    // (Matches original lines 315-318: only project non-goal waypoints)
+                    waypoint = goal_ptr->position;
+                    nav_heading = Point3D(0, 0, 0);
                 }
 
                 // Churn reduction: only publish if waypoint moved significantly
