@@ -389,10 +389,9 @@ class ModuleBase(Configurable, CompositeResource):
         self._rec_unsubs: list[Callable[[], None]] = []
         for name, out in self.outputs.items():
             stream = self._rec_store.stream(name, out.type)
-            payload_mod = f"{out.type.__module__}.{out.type.__qualname__}"
             reg = self._rec_store._registry.get(name)
             if reg and "channel" not in reg:
-                reg["channel"] = f"/{name}#{payload_mod}"
+                reg["channel"] = f"/{name}#{out.type.msg_name}"
                 self._rec_store._registry.put(name, reg)
 
             def cb(msg: Any, _stream: Any = stream) -> None:

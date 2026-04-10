@@ -19,6 +19,7 @@ from collections import defaultdict
 from collections.abc import Mapping
 import dataclasses
 import importlib
+from pathlib import Path
 import shutil
 import sys
 from types import MappingProxyType
@@ -271,10 +272,14 @@ class ModuleCoordinator(Resource):
         coordinator.start_all_modules()
 
         if global_config.record_path:
+            # Delete existing file, don't append to it.
+            Path(global_config.record_path).unlink(missing_ok=True)
+            record_modules = blueprint.record_modules
             for bp in blueprint.active_blueprints:
-                instance = coordinator.get_instance(bp.module)
-                if instance is not None:
-                    instance.start_recording(global_config.record_path)
+                if bp.module in record_modules:
+                    instance = coordinator.get_instance(bp.module)
+                    if instance is not None:
+                        instance.start_recording(global_config.record_path)
 
         _log_blueprint_graph(blueprint, coordinator)
 

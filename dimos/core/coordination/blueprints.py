@@ -151,6 +151,7 @@ class Blueprint:
     )
     requirement_checks: tuple[Callable[[], str | None], ...] = field(default_factory=tuple)
     configurator_checks: "tuple[SystemConfigurator, ...]" = field(default_factory=tuple)
+    record_modules: tuple[type[ModuleBase], ...] = field(default_factory=tuple)
 
     @classmethod
     def create(cls, module: type[ModuleBase], **kwargs: Any) -> "Blueprint":
@@ -159,6 +160,9 @@ class Blueprint:
 
     def disabled_modules(self, *modules: type[ModuleBase]) -> "Blueprint":
         return replace(self, disabled_modules_tuple=self.disabled_modules_tuple + modules)
+
+    def default_record_modules(self, *modules: type[ModuleBase]) -> "Blueprint":
+        return replace(self, record_modules=self.record_modules + modules)
 
     def transports(self, transports: dict[tuple[str, type], Any]) -> "Blueprint":
         return replace(self, transport_map=MappingProxyType({**self.transport_map, **transports}))
@@ -216,6 +220,7 @@ def autoconnect(*blueprints: Blueprint) -> Blueprint:
         remapping_map=MappingProxyType(all_remappings),
         requirement_checks=all_requirement_checks,
         configurator_checks=all_configurator_checks,
+        record_modules=tuple(module for bp in blueprints for module in bp.record_modules),
     )
 
 
