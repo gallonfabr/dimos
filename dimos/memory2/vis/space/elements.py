@@ -25,11 +25,12 @@ Rerun renderer can use the wrapped msgs' .to_rerun() methods directly.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Any, Union
 
 from dimos.memory2.vis.color import Color
 
 if TYPE_CHECKING:
+    from dimos.memory2.type.observation import Observation
     from dimos.msgs.geometry_msgs.Point import Point as GeoPoint
     from dimos.msgs.geometry_msgs.Pose import Pose as GeoPose
     from dimos.msgs.geometry_msgs.PoseStamped import PoseStamped
@@ -38,6 +39,7 @@ if TYPE_CHECKING:
     from dimos.msgs.nav_msgs.Path import Path
     from dimos.msgs.sensor_msgs.CameraInfo import CameraInfo
     from dimos.msgs.sensor_msgs.Image import Image
+    from dimos.msgs.sensor_msgs.PointCloud2 import PointCloud2
 
 
 @dataclass
@@ -150,5 +152,5 @@ SpaceElement = Union[
     Text,
     "OccupancyGrid",  # pass-through, rendered as base map raster
     "PointCloud2",  # pass-through, rerun renders full 3D, SVG collapses to occupancy grid
-    "Observation",  # pass-through, renderer decides presentation (covers EmbeddedObservation)
+    "Observation[Any]",  # pass-through, renderer decides presentation (covers EmbeddedObservation)
 ]

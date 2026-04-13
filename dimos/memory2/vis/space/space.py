@@ -167,7 +167,7 @@ class Space:
             c = getattr(el, "color", None)
             if isinstance(c, Color) and c.value is not None:
                 lo, hi = ranges[c.group]
-                el.color = resolve_color(c.value, lo, hi, c.cmap)
+                el.color = resolve_color(c.value, lo, hi, c.cmap)  # type: ignore[union-attr]
 
     def to_svg(self, path: str | None = None) -> str:
         """Render to SVG string. Optionally write to file."""

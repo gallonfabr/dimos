@@ -45,8 +45,10 @@ def _cmap(name: str):  # type: ignore[no-untyped-def]
     return plt.get_cmap(name)
 
 
-def hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+def hex_to_rgb(hex_color: str | Color) -> tuple[int, int, int]:
     """Convert a hex color string like '#1abc9c' to an (R, G, B) tuple."""
+    if not isinstance(hex_color, str):
+        raise TypeError(f"Expected resolved hex string, got {type(hex_color).__name__}")
     hex_color = hex_color.lstrip("#")
     if len(hex_color) == 3:
         hex_color = "".join(c * 2 for c in hex_color)

@@ -55,8 +55,7 @@ def mosaic(
             images.append(f.data.annotated_image(scale=4))
         else:
             print(f)
-            print(f"data {type(f.data).__name__.data}")
-            raise TypeError(f"Cannot extract Image xoxo {type(f).__name__}")
+            raise TypeError(f"Cannot extract Image from {type(f).__name__}")
     if not images:
         raise ValueError("No images to mosaic")
 

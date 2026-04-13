@@ -211,7 +211,9 @@ def render(space: Space, app_id: str = "space", spawn: bool = True) -> None:
         path = f"scene/cameras/{i}"
         rr.log(path, el.pose.to_rerun(), static=True)
         if el.camera_info:
-            rr.log(path, el.camera_info.to_rerun(), static=True)
+            pinhole = el.camera_info.to_rerun()
+            assert not isinstance(pinhole, list)
+            rr.log(path, pinhole, static=True)
         elif el.image:
             h, w = el.image.shape[:2]
             focal = max(w, h)
@@ -260,13 +262,14 @@ def render(space: Space, app_id: str = "space", spawn: bool = True) -> None:
         elif isinstance(data, str):
             # Word-wrap for label
             words = data.split()
-            lines, line = [], ""
-            for w in words:
-                if line and len(line) + len(w) + 1 > 40:
+            lines: list[str] = []
+            line: str = ""
+            for word in words:
+                if line and len(line) + len(word) + 1 > 40:
                     lines.append(line)
-                    line = w
+                    line = word
                 else:
-                    line = f"{line} {w}" if line else w
+                    line = f"{line} {word}" if line else word
             if line:
                 lines.append(line)
             label = "\n".join(lines)
