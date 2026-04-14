@@ -85,7 +85,7 @@ CAMERA_INFO_MODE = "default"  # "default" | "slow" | "once"
 # worker is a full Python process = ~150MB RSS + forkserver overhead.
 # None = leave at blueprint default (unitree-go2-basic sets 4 via
 # global_config(n_workers=4)).
-N_WORKERS: int | None = None
+N_WORKERS: int | None = 2
 
 
 # ------------------------------------------------------------------
