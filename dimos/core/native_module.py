@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import collections
 import enum
+import functools
 import inspect
 import json
 import os
@@ -82,12 +83,12 @@ class NativeModuleConfig(ModuleConfig):
     cwd: str | None = None
     extra_args: list[str] = Field(default_factory=list)
     extra_env: dict[str, str] = Field(default_factory=dict)
-    shutdown_timeout: float = 10.0
+    shutdown_timeout: float = DEFAULT_THREAD_JOIN_TIMEOUT
     log_format: LogFormat = LogFormat.TEXT
     rebuild_on_change: list[PathEntry] | None = None
 
     # Override in subclasses to exclude fields from CLI arg generation
-    cli_exclude: frozenset[str] = frozenset({"rebuild_on_change"})
+    cli_exclude: frozenset[str] = frozenset()
     # Override in subclasses to map field names to custom CLI arg names
     # (bypasses the automatic snake_case → camelCase conversion).
     cli_name_override: dict[str, str] = Field(default_factory=dict)
@@ -148,7 +149,7 @@ class NativeModule(Module):
     _tail_lock: threading.Lock
     _tail_size = 50
 
-    @property
+    @functools.cached_property
     def _mod_label(self) -> str:
         """Short human-readable label: ClassName(executable_basename)."""
         exe = Path(self.config.executable).name if self.config.executable else "?"
@@ -245,7 +246,7 @@ class NativeModule(Module):
             )
             self._process.send_signal(signal.SIGTERM)
             try:
-                self._process.wait(timeout=DEFAULT_THREAD_JOIN_TIMEOUT)
+                self._process.wait(timeout=self.config.shutdown_timeout)
             except subprocess.TimeoutExpired:
                 logger.warning(
                     "Native process did not exit, sending SIGKILL",
@@ -253,9 +254,9 @@ class NativeModule(Module):
                     pid=self._process.pid,
                 )
                 self._process.kill()
-                self._process.wait(timeout=DEFAULT_THREAD_JOIN_TIMEOUT)
+                self._process.wait(timeout=self.config.shutdown_timeout)
         if self._watchdog is not None and self._watchdog is not threading.current_thread():
-            self._watchdog.join(timeout=DEFAULT_THREAD_JOIN_TIMEOUT)
+            self._watchdog.join(timeout=self.config.shutdown_timeout)
         self._watchdog = None
         self._process = None
         super().stop()
@@ -272,8 +273,8 @@ class NativeModule(Module):
         stdout_t = self._start_reader(proc.stdout, "info", self._stdout_tail)
         stderr_t = self._start_reader(proc.stderr, "warning", self._stderr_tail)
         rc = proc.wait()
-        stdout_t.join(timeout=DEFAULT_THREAD_JOIN_TIMEOUT)
-        stderr_t.join(timeout=DEFAULT_THREAD_JOIN_TIMEOUT)
+        stdout_t.join(timeout=self.config.shutdown_timeout)
+        stderr_t.join(timeout=self.config.shutdown_timeout)
 
         if self._stopping:
             logger.info(
@@ -294,7 +295,6 @@ class NativeModule(Module):
             module=self._mod_label,
             pid=pid,
             returncode=rc,
-            last_stderr="\n".join(stderr_snapshot)[:500] if stderr_snapshot else None,
         )
 
         # Log the last stderr/stdout lines so the cause is visible.
