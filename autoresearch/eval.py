@@ -370,6 +370,9 @@ def run_benchmark(timeout: int) -> BenchmarkResult:
     if timed_out:
         result.validation = "TIMEOUT"
         result.validation_detail = f"killed after {timeout}s (replay loops forever)"
+    elif proc.returncode != 0:
+        result.validation = "FAIL"
+        result.validation_detail = f"exit code {proc.returncode}"
 
     return result
 
