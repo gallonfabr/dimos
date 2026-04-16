@@ -15,7 +15,9 @@ struct PongConfig {
 
 #[tokio::main]
 async fn main() {
-    let transport = LcmTransport::new().await.expect("Failed to create transport");
+    let transport = LcmTransport::new()
+        .await
+        .expect("Failed to create transport");
     let (mut module, config) = NativeModule::from_stdin::<PongConfig>(transport)
         .await
         .expect("Failed to read config from stdin");
@@ -33,7 +35,11 @@ async fn main() {
             Some(msg) => {
                 let reply = Twist {
                     linear: msg.linear,
-                    angular: Vector3 { x: 0.0, y: 0.0, z: config.sample_config as f64 },
+                    angular: Vector3 {
+                        x: 0.0,
+                        y: 0.0,
+                        z: config.sample_config as f64,
+                    },
                 };
                 confirm.publish(&reply).await.ok();
             }

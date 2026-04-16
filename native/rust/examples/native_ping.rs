@@ -8,7 +8,9 @@ use tokio::time::{interval, Duration};
 
 #[tokio::main]
 async fn main() {
-    let transport = LcmTransport::new().await.expect("Failed to create transport");
+    let transport = LcmTransport::new()
+        .await
+        .expect("Failed to create transport");
     let (mut module, _config) = NativeModule::from_stdin::<()>(transport)
         .await
         .expect("Failed to read config from stdin");

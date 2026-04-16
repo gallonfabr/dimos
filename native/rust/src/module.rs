@@ -30,7 +30,9 @@ impl<T: Send + 'static> Route for TypedRoute<T> {
     fn try_dispatch(&self, data: &[u8]) {
         match (self.decode)(data) {
             // If the input channel is full, the newest message is dropped.
-            Ok(msg) => { let _ = self.sender.try_send(msg); }
+            Ok(msg) => {
+                let _ = self.sender.try_send(msg);
+            }
             Err(e) => eprintln!("dimos_module: decode error on {}: {e}", self.topic),
         }
     }
@@ -82,11 +84,12 @@ fn parse_config_json<C: DeserializeOwned>(line: &str) -> io::Result<(HashMap<Str
             io::ErrorKind::InvalidData,
             "missing 'config' field in stdin JSON — coordinator must always send a config object",
         )),
-        Some(v) => serde_json::from_value(v.clone())
-            .map_err(|e| io::Error::new(
+        Some(v) => serde_json::from_value(v.clone()).map_err(|e| {
+            io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("failed to deserialize config: {e}"),
-            ))?,
+            )
+        })?,
     };
 
     Ok((topics, config))
@@ -159,7 +162,9 @@ impl<T: Transport> NativeModule<T> {
     /// ```
     ///
     /// `C` is the module-specific config type. Use `()` if there is no extra configs to pass.
-    pub async fn from_stdin<C: DeserializeOwned + std::fmt::Debug>(transport: T) -> io::Result<(Self, C)> {
+    pub async fn from_stdin<C: DeserializeOwned + std::fmt::Debug>(
+        transport: T,
+    ) -> io::Result<(Self, C)> {
         let mut line = String::new();
         io::stdin().lock().read_line(&mut line)?;
 
@@ -201,16 +206,19 @@ impl<T: Transport> NativeModule<T> {
     ) -> Input<M> {
         let topic = self.topic_for(port);
         let (tx, rx) = mpsc::channel(INPUT_CHANNEL_CAPACITY);
-        self.routes.push(Box::new(TypedRoute { topic: topic.clone(), decode, sender: tx }));
-        Input { topic, receiver: rx }
+        self.routes.push(Box::new(TypedRoute {
+            topic: topic.clone(),
+            decode,
+            sender: tx,
+        }));
+        Input {
+            topic,
+            receiver: rx,
+        }
     }
 
     /// Register an output port. Must be called before `spawn()`.
-    pub fn output<M: Send + 'static>(
-        &self,
-        port: &str,
-        encode: fn(&M) -> Vec<u8>,
-    ) -> Output<M> {
+    pub fn output<M: Send + 'static>(&self, port: &str, encode: fn(&M) -> Vec<u8>) -> Output<M> {
         Output {
             topic: self.topic_for(port),
             encode,
@@ -222,7 +230,12 @@ impl<T: Transport> NativeModule<T> {
     ///
     /// Consumes the module — no new ports can be registered after this point.
     pub fn spawn(self) -> NativeModuleHandle {
-        let NativeModule { mut transport, routes, mut publish_rx, .. } = self;
+        let NativeModule {
+            mut transport,
+            routes,
+            mut publish_rx,
+            ..
+        } = self;
 
         let handle = tokio::spawn(async move {
             loop {
@@ -289,7 +302,13 @@ mod tests {
         let (topics, config) = parse_config_json::<TestConfig>(json).unwrap();
         assert_eq!(topics["data"], "/foo/data");
         assert_eq!(topics["confirm"], "/foo/confirm");
-        assert_eq!(config, TestConfig { value: 42, name: "hello".into() });
+        assert_eq!(
+            config,
+            TestConfig {
+                value: 42,
+                name: "hello".into()
+            }
+        );
     }
 
     #[test]
@@ -297,7 +316,10 @@ mod tests {
         let json = r#"{"topics": {"data": "/foo/data"}}"#;
         let result = parse_config_json::<TestConfig>(json);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("missing 'config' field"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("missing 'config' field"));
     }
 
     #[test]
@@ -326,7 +348,10 @@ mod tests {
         let json = r#"{"topics": {}, "config": {"value": "not_a_number", "name": "x"}}"#;
         let result = parse_config_json::<TestConfig>(json);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("failed to deserialize config"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("failed to deserialize config"));
     }
 
     #[test]
