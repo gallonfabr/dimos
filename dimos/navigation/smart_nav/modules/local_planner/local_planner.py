@@ -23,12 +23,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from dimos_lcm.geometry_msgs import PolygonStamped
 from dimos_lcm.std_msgs import Float32
 
 from dimos.core.native_module import NativeModule, NativeModuleConfig
 from dimos.core.stream import In, Out
 from dimos.msgs.geometry_msgs.PointStamped import PointStamped
-from dimos.msgs.geometry_msgs.PolygonStamped import PolygonStamped
 from dimos.msgs.geometry_msgs.PoseStamped import PoseStamped
 from dimos.msgs.geometry_msgs.Twist import Twist
 from dimos.msgs.nav_msgs.Odometry import Odometry
