@@ -106,6 +106,10 @@ class UnitreeGo2TwistAdapter:
 
     Args:
         dof: Must be 3 for Go2. ValueError otherwise.
+        speed_level: SportClient speed envelope. -1 = slow, 0 = normal,
+            1 = fast (default, max). Applied once after FreeWalk succeeds.
+            May be ignored in non-'normal' modes (mcf runs its own planner).
+            Change at runtime via set_speed_level().
 
     TODO(network_interface): multi-NIC hosts may need an explicit DDS
     interface name passed through to ChannelFactoryInitialize(0, iface).
@@ -120,12 +124,13 @@ class UnitreeGo2TwistAdapter:
     # don't force a release (which would drop servo) just to match a name.
     _SPORT_MODE_CANDIDATES: tuple[str, ...] = ("normal", "ai", "advanced", "mcf")
 
-    def __init__(self, dof: int = 3, **_: object) -> None:
+    def __init__(self, dof: int = 3, speed_level: int = 1, **_: object) -> None:
         if dof != 3:
             raise ValueError(f"Go2 only supports 3 DOF (vx, vy, wz), got {dof}")
 
         self._session: _Session | None = None
         self._session_lock = threading.Lock()
+        self._speed_level = speed_level
 
     # =========================================================================
     # TwistBaseAdapter protocol
@@ -572,6 +577,32 @@ class UnitreeGo2TwistAdapter:
         with session.lock:
             return session.latest_state
 
+    def set_speed_level(self, level: int) -> bool:
+        """Set the SportClient speed envelope at runtime.
+
+        Go2 SDK convention: -1 = slow, 0 = normal, 1 = fast (max).
+        Only reliably respected in 'normal' mode; mcf / ai controllers
+        may ignore it. Updates self._speed_level so subsequent
+        _initialize_locomotion() calls apply the same level.
+
+        Returns True if the RPC returned 0.
+        """
+        session = self._get_session()
+        try:
+            with session.lock:
+                ret = session.client.SpeedLevel(level)
+        except Exception as e:
+            logger.error(f"[Go2] SpeedLevel raised: {e}")
+            return False
+
+        if ret != 0:
+            logger.warning(f"[Go2] SpeedLevel({level}) returned {ret}")
+            return False
+
+        self._speed_level = level
+        logger.info(f"[Go2] ✓ SpeedLevel set to {level}")
+        return True
+
     # =========================================================================
     # Low-level stubs (defined but unwired — real impl in adapter_lowlevel.py)
     # =========================================================================
@@ -774,6 +805,21 @@ class UnitreeGo2TwistAdapter:
                 logger.error(f"[Go2] FreeWalk failed with code {ret}")
                 return False
             time.sleep(2)
+
+            # Apply speed profile. Non-fatal if it fails — mcf / ai modes
+            # may ignore SpeedLevel, which is fine; Move() still works.
+            try:
+                with session.lock:
+                    sl_ret = session.client.SpeedLevel(self._speed_level)
+                if sl_ret == 0:
+                    logger.info(f"[Go2] ✓ SpeedLevel({self._speed_level}) applied")
+                else:
+                    logger.warning(
+                        f"[Go2] SpeedLevel({self._speed_level}) returned "
+                        f"{sl_ret} — likely ignored by non-'normal' controller"
+                    )
+            except Exception as e:
+                logger.warning(f"[Go2] SpeedLevel raised (non-fatal): {e}")
 
             session.locomotion_ready = True
             logger.info("[Go2] ✓ Locomotion ready")
