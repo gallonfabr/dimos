@@ -110,6 +110,11 @@ class UnitreeGo2TwistAdapter:
             1 = fast (default, max). Applied once after FreeWalk succeeds.
             May be ignored in non-'normal' modes (mcf runs its own planner).
             Change at runtime via set_speed_level().
+        rage_mode: If True (default), enable Rage Mode at the end of
+            connect(). Widens the forward envelope to ~2.5 m/s via a
+            dedicated mcf AI policy. See set_rage_mode() for details.
+            Failure to enable is non-fatal — connect still returns True
+            and the robot stays in regular FreeWalk.
 
     TODO(network_interface): multi-NIC hosts may need an explicit DDS
     interface name passed through to ChannelFactoryInitialize(0, iface).
@@ -124,13 +129,25 @@ class UnitreeGo2TwistAdapter:
     # don't force a release (which would drop servo) just to match a name.
     _SPORT_MODE_CANDIDATES: tuple[str, ...] = ("normal", "ai", "advanced", "mcf")
 
-    def __init__(self, dof: int = 3, speed_level: int = 1, **_: object) -> None:
+    # Extended AI-controller API IDs served by mcf's libgo2_ai_module.so,
+    # not exposed in the public unitree_sdk2py. Extracted from the on-robot
+    # binary's .rodata — see data/notes/go2_firmware_modes.md.
+    _SPORT_API_ID_RAGEMODE: int = 2059
+
+    def __init__(
+        self,
+        dof: int = 3,
+        speed_level: int = 1,
+        rage_mode: bool = True,
+        **_: object,
+    ) -> None:
         if dof != 3:
             raise ValueError(f"Go2 only supports 3 DOF (vx, vy, wz), got {dof}")
 
         self._session: _Session | None = None
         self._session_lock = threading.Lock()
         self._speed_level = speed_level
+        self._rage_mode_default = rage_mode
 
     # =========================================================================
     # TwistBaseAdapter protocol
@@ -218,6 +235,12 @@ class UnitreeGo2TwistAdapter:
                 logger.error("[Go2] Failed to initialize locomotion mode")
                 self.disconnect()
                 return False
+
+            if self._rage_mode_default:
+                if not self.set_rage_mode(True):
+                    logger.warning(
+                        "[Go2] Rage Mode enable failed — continuing with regular locomotion"
+                    )
 
             self.print_status()
             return True
@@ -760,6 +783,64 @@ class UnitreeGo2TwistAdapter:
 
         self._speed_level = level
         logger.info(f"[Go2] ✓ SpeedLevel set to {level}")
+        return True
+
+    # =========================================================================
+    # Extended mcf AI controller RPCs (undocumented — reverse-engineered)
+    # =========================================================================
+
+    def set_rage_mode(self, enable: bool) -> bool:
+        """Toggle Rage Mode on the Go2 (mcf AI controller, api_id 2059).
+
+        Rage widens the forward velocity envelope to ~2.5 m/s (vs standard
+        ~1.0) via a dedicated MNN policy with stiffer PD gains. Firmware
+        clamps to up_vx=2.5, up_vy=1.0, up_vyaw=5.0.
+
+        The mcf FSM only accepts this toggle from BalanceStand (id 1002)
+        or StopMove (1003). This method issues BalanceStand() first so
+        callers don't need to know — BalanceStand is idempotent.
+
+        Returns True on RPC return code 0. Does not verify the FSM
+        actually transitioned into FsmRageMode; inspect
+        SportModeState.mode if certainty is needed.
+        """
+        session = self._get_session()
+
+        try:
+            with session.lock:
+                ret = session.client.BalanceStand()
+            if ret != 0:
+                logger.warning(f"[Go2] BalanceStand before rage toggle returned {ret}")
+            time.sleep(0.3)
+        except Exception as e:
+            logger.warning(f"[Go2] BalanceStand raised before rage toggle: {e}")
+
+        if self._call_sport_api(self._SPORT_API_ID_RAGEMODE, {"data": enable}):
+            logger.info(f"[Go2] ✓ Rage Mode {'enabled' if enable else 'disabled'}")
+            return True
+        return False
+
+    def _call_sport_api(self, api_id: int, payload: dict | None = None) -> bool:
+        """Generic escape hatch for undocumented mcf sport API IDs.
+
+        Issues SportClient._Call(api_id, json.dumps(payload or {})) under
+        session.lock. Returns True on RPC code 0. On failure, logs the
+        code and any response data for debugging.
+        """
+        import json
+
+        session = self._get_session()
+        body = json.dumps(payload or {})
+        try:
+            with session.lock:
+                code, data = session.client._Call(api_id, body)
+        except Exception as e:
+            logger.error(f"[Go2] _Call({api_id}, {body}) raised: {e}")
+            return False
+
+        if code != 0:
+            logger.warning(f"[Go2] _Call({api_id}, {body}) -> code={code} data={data!r}")
+            return False
         return True
 
     # =========================================================================
