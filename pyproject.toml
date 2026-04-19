@@ -64,7 +64,8 @@ src = ["src"]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 # E501 ignored since line-length is already enforced above; W291 for trailing whitespace
 # also ignoring SIM108 (ternary operator suggestions) — I find explicit if/else more readable
-ignore = ["E501", "W291", "SIM108"]
+# also ignoring B007 (unused loop variable) — I use _ inconsistently and don't want the noise
+ignore = ["E501", "W291", "SIM108", "B007"]
 
 [tool.mypy]
 python_version = "3.10"
