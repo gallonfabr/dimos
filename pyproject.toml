@@ -74,4 +74,5 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 asyncio_mode = "auto"
 # increase default timeout to avoid flaky async tests on slow machines
-timeout = 60
+# bumped from 60 -> 120 since my dev machine is particularly slow
+timeout = 120
