@@ -75,4 +75,5 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 # increase default timeout to avoid flaky async tests on slow machines
 # bumped from 60 -> 120 since my dev machine is particularly slow
-timeout = 120
+# bumped again to 180 — running inside a VM makes things even slower
+timeout = 180
