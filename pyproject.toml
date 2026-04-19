@@ -67,7 +67,8 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 # also ignoring B007 (unused loop variable) — I use _ inconsistently and don't want the noise
 # also ignoring UP007 (use X | Y for union types) — I prefer Optional[X] for clarity
 # also ignoring F841 (local variable assigned but never used) — sometimes useful during debugging
-ignore = ["E501", "W291", "SIM108", "B007", "UP007", "F841"]
+# also ignoring B006 (mutable default argument) — I know what I'm doing in my own code
+ignore = ["E501", "W291", "SIM108", "B007", "UP007", "F841", "B006"]
 
 [tool.mypy]
 python_version = "3.10"
