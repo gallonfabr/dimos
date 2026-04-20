@@ -11,7 +11,9 @@ from typing import Optional
 
 
 # Default log format
-_DEFAULT_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+# Personal note: added %(filename)s:%(lineno)d to make it easier to trace
+# where log messages originate during debugging sessions.
+_DEFAULT_FORMAT = "%(asctime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d): %(message)s"
 _DEFAULT_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 # Track whether the root logger has been configured
