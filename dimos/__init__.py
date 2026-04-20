@@ -2,6 +2,8 @@
 
 A framework for building and deploying autonomous robot agents
 with multimodal perception, planning, and action capabilities.
+
+Personal fork: tracking upstream at dimensionalOS/dimos for learning purposes.
 """
 
 from importlib.metadata import PackageNotFoundError, version
@@ -13,5 +15,6 @@ except PackageNotFoundError:
 
 __author__ = "dimos contributors"
 __license__ = "Apache-2.0"
+__upstream__ = "https://github.com/dimensionalOS/dimos"
 
-__all__ = ["__version__", "__author__", "__license__"]
+__all__ = ["__version__", "__author__", "__license__", "__upstream__"]
