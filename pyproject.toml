@@ -70,7 +70,8 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 # also ignoring B006 (mutable default argument) — I know what I'm doing in my own code
 # also ignoring SIM117 (combine nested with statements) — nested withs are easier to debug IMO
 # also ignoring F401 (imported but unused) — I often import for side effects or future use
-ignore = ["E501", "W291", "SIM108", "B007", "UP007", "F841", "B006", "SIM117", "F401"]
+# also ignoring E741 (ambiguous variable names like l, O, I) — I use these in math-heavy code
+ignore = ["E501", "W291", "SIM108", "B007", "UP007", "F841", "B006", "SIM117", "F401", "E741"]
 
 [tool.mypy]
 python_version = "3.10"
