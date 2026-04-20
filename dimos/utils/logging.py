@@ -24,7 +24,7 @@ def configure_logging(
     level: Optional[str] = None,
     fmt: str = _DEFAULT_FORMAT,
     date_fmt: str = _DEFAULT_DATE_FORMAT,
-    stream=sys.stdout,
+    stream=sys.stderr,
 ) -> None:
     """Configure the root dimos logger.
 
@@ -33,7 +33,8 @@ def configure_logging(
                Defaults to the DIMOS_LOG_LEVEL env var, or INFO.
         fmt: Log message format string.
         date_fmt: Date/time format string.
-        stream: Output stream for the handler. Defaults to stdout.
+        stream: Output stream for the handler. Defaults to stderr so that
+                log output doesn't mix with stdout when piping program output.
     """
     global _configured
 
