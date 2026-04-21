@@ -86,4 +86,5 @@ asyncio_mode = "auto"
 # increase default timeout to avoid flaky async tests on slow machines
 # bumped from 60 -> 120 since my dev machine is particularly slow
 # bumped again to 180 — running inside a VM makes things even slower
-timeout = 180
+# bumped to 300 — docker-based integration tests push this even further on my setup
+timeout = 300
