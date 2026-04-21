@@ -22,5 +22,6 @@ __upstream__ = "https://github.com/dimensionalOS/dimos"
 # Upstream sync: periodically rebase against upstream main to stay current
 __fork_purpose__ = "personal learning and experimentation"
 __fork_date__ = "2024-01-15"  # date I created this fork
+__fork_version__ = "0.1.0-personal"  # my own versioning on top of upstream
 
-__all__ = ["__version__", "__author__", "__license__", "__upstream__", "__fork_purpose__", "__fork_date__"]
+__all__ = ["__version__", "__author__", "__license__", "__upstream__", "__fork_purpose__", "__fork_date__", "__fork_version__"]
