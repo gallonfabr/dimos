@@ -7,6 +7,9 @@ Personal fork: tracking upstream at dimensionalOS/dimos for learning purposes.
 Fork notes: experimenting with custom agent configurations and perception pipelines.
 
 Note: added __fork_date__ to track when this fork was created for my own reference.
+
+TODO: look into the perception pipeline internals - specifically how multimodal
+inputs are fused before being passed to the planning module.
 """
 
 from importlib.metadata import PackageNotFoundError, version
