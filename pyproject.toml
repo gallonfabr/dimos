@@ -79,6 +79,8 @@ strict = false
 ignore_missing_imports = true
 # enabling warn_unused_ignores so I can clean up stale `type: ignore` comments over time
 warn_unused_ignores = true
+# also want to know about redundant casts as I refactor
+warn_redundant_casts = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
