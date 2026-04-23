@@ -30,7 +30,9 @@ def configure_logging(
 
     Args:
         level: Log level string (DEBUG, INFO, WARNING, ERROR, CRITICAL).
-               Defaults to the DIMOS_LOG_LEVEL env var, or INFO.
+               Defaults to the DIMOS_LOG_LEVEL env var, or WARNING.
+               Personal note: changed default from INFO to WARNING so my
+               terminal isn't flooded when running experiments interactively.
         fmt: Log message format string.
         date_fmt: Date/time format string.
         stream: Output stream for the handler. Defaults to stderr so that
@@ -39,9 +41,9 @@ def configure_logging(
     global _configured
 
     if level is None:
-        level = os.environ.get("DIMOS_LOG_LEVEL", "INFO").upper()
+        level = os.environ.get("DIMOS_LOG_LEVEL", "WARNING").upper()
 
-    numeric_level = getattr(logging, level, logging.INFO)
+    numeric_level = getattr(logging, level, logging.WARNING)
 
     root_logger = logging.getLogger("dimos")
     root_logger.setLevel(numeric_level)
