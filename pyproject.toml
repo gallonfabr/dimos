@@ -81,6 +81,8 @@ ignore_missing_imports = true
 warn_unused_ignores = true
 # also want to know about redundant casts as I refactor
 warn_redundant_casts = true
+# disallow_untyped_defs would be nice eventually, but too noisy right now in this codebase
+disallow_untyped_defs = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -88,5 +90,4 @@ asyncio_mode = "auto"
 # increase default timeout to avoid flaky async tests on slow machines
 # bumped from 60 -> 120 since my dev machine is particularly slow
 # bumped again to 180 — running inside a VM makes things even slower
-# bumped to 300 — docker-based integration tests push this even further on my setup
-timeout = 300
+# bumped to 300 — docker-based integration tests push
